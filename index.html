@@ -126,6 +126,16 @@
     .code-input { font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; }
     .login-type-toggle { display: flex; gap: 0.5rem; }
     .login-type-toggle button { flex: 1; }
+    .report-row-clickable { cursor: pointer; transition: border-color 0.15s ease; }
+    .report-row-clickable:hover { border-color: var(--accent); }
+    .comment-thread { display: flex; flex-direction: column; gap: 0.75rem; margin: 1.25rem 0; }
+    .comment-bubble { padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-raised); max-width: 85%; }
+    .comment-bubble.mine { align-self: flex-end; border-color: var(--accent); background: var(--accent-soft, rgba(232,163,61,0.1)); }
+    .comment-meta { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.35rem; }
+    .comment-text { font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap; }
+    .comment-item { align-items: flex-start !important; flex-direction: column; gap: 0.35rem !important; }
+    .comment-head { display: flex; justify-content: space-between; width: 100%; }
+    .comment-message { margin: 0; font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap; }
     @media (max-width: 560px) {
       .field-row { grid-template-columns: 1fr; }
       .stat-grid { grid-template-columns: 1fr; }
@@ -173,7 +183,7 @@
     { key: "low", ja: "低", en: "Low", color: "#5B8DEF" },
   ];
 
-  const state = { tab: "home", programs: [], hunters: [], reportCount: 0, activeProgramId: null };
+  const state = { tab: "home", programs: [], hunters: [], reportCount: 0, activeProgramId: null, activeReportId: null, reportOrigin: null };
 
   const main = document.getElementById("main");
   const toastEl = document.getElementById("toast");
@@ -379,6 +389,7 @@
     if (state.tab === "login") return renderLogin();
     if (state.tab === "myprofile") return renderMyProfile();
     if (state.tab === "myreports") return renderMyReports();
+    if (state.tab === "reportdetail") return renderReportDetail();
   }
 
   function renderHome() {
@@ -463,12 +474,17 @@
     if (!program) { state.activeProgramId = null; return renderProgramList(); }
 
     main.innerHTML = `<div class="loading">読み込み中…</div>`;
+    const session = getSession();
+    const isOwner = session && session.userType === "program" && session.id === program.id;
+
     let reports = [];
-    try {
-      const data = await apiGet(`/programs/${program.id}/reports`);
-      reports = (data.reports || []).map(normalizeReport);
-    } catch (e) {
-      showToast("レポートの取得に失敗しました");
+    if (isOwner) {
+      try {
+        const data = await apiGetAuthed(`/programs/${program.id}/reports`);
+        reports = (data.reports || []).map(normalizeReport);
+      } catch (e) {
+        showToast("レポートの取得に失敗しました");
+      }
     }
 
     main.innerHTML = `
@@ -490,28 +506,37 @@
           <div><p class="section-label">連絡先</p><p>${esc(program.contactEmail)}</p></div>
         </div>
         <div class="panel-head" style="margin-top:2rem">
-          <h3>提出済みレポート（${reports.length}）</h3>
+          <h3>${isOwner ? `提出済みレポート（${reports.length}）` : "脆弱性を見つけましたか？"}</h3>
           <button class="btn primary sm" id="toggle-report-form">脆弱性を報告する</button>
         </div>
         <div id="report-form-slot"></div>
-        ${reports.length === 0
-          ? `<div class="empty-state"><p>まだレポートがありません。</p></div>`
-          : `<ul class="report-list">${reports.map((r) => {
-              const sev = sevMeta(r.severity);
-              return `<li class="report-row">
-                <span class="severity-chip" style="--chip:${sev.color}"><i></i> ${sev.ja}</span>
-                <span class="report-title">${esc(r.title)}</span>
-                <span class="report-status">${esc(r.status)}</span>
-                <span class="card-date">${fmtDate(r.createdAt)}</span>
-              </li>`;
-            }).join("")}</ul>`}
+        ${isOwner
+          ? (reports.length === 0
+              ? `<div class="empty-state"><p>まだレポートがありません。</p></div>`
+              : `<ul class="report-list">${reports.map((r) => {
+                  const sev = sevMeta(r.severity);
+                  return `<li class="report-row report-row-clickable" data-report-id="${r.id}">
+                    <span class="severity-chip" style="--chip:${sev.color}"><i></i> ${sev.ja}</span>
+                    <span class="report-title">${esc(r.title)}</span>
+                    <span class="report-status">${esc(r.status)}</span>
+                    <span class="card-date">${fmtDate(r.createdAt)}</span>
+                  </li>`;
+                }).join("")}</ul>`)
+          : `<p class="muted">このプログラムの企業アカウントでログインすると、届いたレポート一覧がここに表示されます。</p>`}
       </section>
     `;
     document.getElementById("back-btn").addEventListener("click", () => { state.activeProgramId = null; render(); });
+    main.querySelectorAll("[data-report-id]").forEach((el) => {
+      el.addEventListener("click", () => {
+        state.activeReportId = el.dataset.reportId;
+        state.reportOrigin = { tab: "programs", programId: program.id };
+        state.tab = "reportdetail";
+        render();
+      });
+    });
 
     let formOpen = false;
     document.getElementById("toggle-report-form").addEventListener("click", (e) => {
-      const session = getSession();
       if (!session || session.userType !== "hunter") {
         showToast("レポートの提出にはハンターとしてログインが必要です");
         setTab("login");
@@ -965,7 +990,7 @@
           ? `<div class="empty-state"><p>まだレポートを提出していません。</p></div>`
           : `<ul class="report-list">${reports.map((r) => {
               const sev = sevMeta(r.severity);
-              return `<li class="report-row">
+              return `<li class="report-row report-row-clickable" data-report-id="${r.id}">
                 <span class="severity-chip" style="--chip:${sev.color}"><i></i> ${sev.ja}</span>
                 <span class="report-title">${esc(r.title)}<br><span class="muted" style="font-size:0.75rem">${esc(r.program_company_name)}宛</span></span>
                 <span class="report-status">${esc(r.status)}</span>
@@ -975,6 +1000,120 @@
       </section>
     `;
     document.getElementById("go-programs-2").addEventListener("click", () => setTab("programs"));
+    main.querySelectorAll("[data-report-id]").forEach((el) => {
+      el.addEventListener("click", () => {
+        state.activeReportId = el.dataset.reportId;
+        state.reportOrigin = { tab: "myreports" };
+        state.tab = "reportdetail";
+        render();
+      });
+    });
+  }
+
+  // ---------- レポート詳細（本人ハンター or 宛先企業のみ。返信スレッド付き） ----------
+  async function renderReportDetail() {
+    const session = getSession();
+    if (!session) { setTab("login"); return; }
+
+    main.innerHTML = `<div class="loading">読み込み中…</div>`;
+    let detail, comments;
+    try {
+      [detail, comments] = await Promise.all([
+        apiGetAuthed(`/reports/${state.activeReportId}`),
+        apiGetAuthed(`/reports/${state.activeReportId}/comments`),
+      ]);
+    } catch (e) {
+      showToast("レポートの取得に失敗しました");
+      goBackFromReportDetail();
+      return;
+    }
+
+    const r = detail.report;
+    const sev = sevMeta(r.severity);
+    const commentList = comments.comments || [];
+
+    main.innerHTML = `
+      <section class="panel">
+        <button class="back" id="report-back-btn">← 戻る</button>
+        <div class="detail-head">
+          <h2>${esc(r.title)}</h2>
+          <span class="severity-chip" style="--chip:${sev.color}"><i></i> ${sev.ja}</span>
+        </div>
+        <p class="muted" style="margin:0.5rem 0 1.25rem">
+          ${esc(detail.program.company_name)}宛${detail.hunter ? ` ／ 報告者: ${esc(detail.hunter.handle)}` : ""} ／ ステータス: ${esc(r.status)} ／ ${fmtDate(r.created_at)}
+        </p>
+
+        <div class="detail-grid" style="grid-template-columns:1fr">
+          <div><p class="section-label">詳細な説明</p><p style="white-space:pre-wrap">${esc(r.description)}</p></div>
+        </div>
+        ${r.poc ? `
+          <div class="detail-grid" style="grid-template-columns:1fr; margin-top:1rem">
+            <div><p class="section-label">再現手順（PoC）</p><p style="white-space:pre-wrap">${esc(r.poc)}</p></div>
+          </div>
+        ` : ""}
+
+        <p class="section-label" style="margin-top:2rem">やり取り</p>
+        <div class="comment-thread" id="comment-thread">
+          ${commentList.length === 0
+            ? `<p class="muted">まだやり取りはありません。</p>`
+            : commentList.map((cm) => {
+                const mine = cm.author_type === session.userType && cm.author_id === session.id;
+                const who = cm.author_type === "hunter" ? "ハンター" : "企業";
+                return `<div class="comment-bubble${mine ? " mine" : ""}">
+                  <div class="comment-meta">${who} ・ ${fmtDate(cm.created_at)}</div>
+                  <div class="comment-text">${esc(cm.message)}</div>
+                </div>`;
+              }).join("")}
+        </div>
+
+        <form class="form" id="comment-form">
+          <label class="field">
+            <span class="field-label">返信を書く</span>
+            <textarea name="message" rows="3" placeholder="対応状況や追加の質問などを入力してください"></textarea>
+          </label>
+          <p class="form-error" id="comment-error" style="display:none"></p>
+          <button class="btn primary" type="submit">送信する</button>
+        </form>
+      </section>
+    `;
+
+    document.getElementById("report-back-btn").addEventListener("click", goBackFromReportDetail);
+
+    const form = document.getElementById("comment-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const message = new FormData(form).get("message");
+      const errEl = document.getElementById("comment-error");
+      if (!message || !message.trim()) {
+        errEl.textContent = "メッセージを入力してください";
+        errEl.style.display = "block";
+        return;
+      }
+      errEl.style.display = "none";
+      const submitBtn = form.querySelector("button[type=submit]");
+      submitBtn.disabled = true; submitBtn.textContent = "送信中…";
+      try {
+        await apiPost(`/reports/${state.activeReportId}/comments`, { message });
+        renderReportDetail();
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "送信する";
+        errEl.textContent = err.message || "送信に失敗しました";
+        errEl.style.display = "block";
+      }
+    });
+  }
+
+  function goBackFromReportDetail() {
+    const origin = state.reportOrigin;
+    state.activeReportId = null;
+    state.reportOrigin = null;
+    if (origin && origin.tab === "programs" && origin.programId) {
+      state.activeProgramId = origin.programId;
+      state.tab = "programs";
+    } else {
+      state.tab = "myreports";
+    }
+    render();
   }
 
   // ---------- ログイン ----------
@@ -1066,7 +1205,6 @@
     setTab("home");
   })();
 })();
-</script>
 </script>
 
 
