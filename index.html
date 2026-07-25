@@ -145,6 +145,7 @@
       <button class="tab guest-only" data-tab="hunter">ハンター登録</button>
       <button class="tab guest-only" data-tab="login">ログイン</button>
       <button class="tab auth-only" data-tab="myprofile" style="display:none">マイページ</button>
+      <button class="tab auth-only hunter-only" data-tab="myreports" style="display:none">マイレポート</button>
     </nav>
     <div class="auth-status" id="auth-status"></div>
   </header>
@@ -202,9 +203,13 @@
     return res.json();
   }
   async function apiPost(path, body) {
+    const session = getSession();
     const res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+      },
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
@@ -270,6 +275,10 @@
     const session = getSession();
     document.querySelectorAll(".guest-only").forEach((el) => { el.style.display = session ? "none" : ""; });
     document.querySelectorAll(".auth-only").forEach((el) => { el.style.display = session ? "" : "none"; });
+    document.querySelectorAll(".hunter-only").forEach((el) => {
+      if (!session) { el.style.display = "none"; return; }
+      el.style.display = session.userType === "hunter" ? "" : "none";
+    });
   }
 
   function renderAuthStatus() {
@@ -347,6 +356,9 @@
     if (session && (tab === "company" || tab === "hunter" || tab === "login")) {
       tab = "programs";
     }
+    if (tab === "myreports" && (!session || session.userType !== "hunter")) {
+      tab = session ? "myprofile" : "login";
+    }
     state.tab = tab;
     state.activeProgramId = null;
     document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === tab));
@@ -366,6 +378,7 @@
     if (state.tab === "hunter") return renderHunterForm();
     if (state.tab === "login") return renderLogin();
     if (state.tab === "myprofile") return renderMyProfile();
+    if (state.tab === "myreports") return renderMyReports();
   }
 
   function renderHome() {
@@ -498,6 +511,12 @@
 
     let formOpen = false;
     document.getElementById("toggle-report-form").addEventListener("click", (e) => {
+      const session = getSession();
+      if (!session || session.userType !== "hunter") {
+        showToast("レポートの提出にはハンターとしてログインが必要です");
+        setTab("login");
+        return;
+      }
       formOpen = !formOpen;
       e.target.textContent = formOpen ? "フォームを閉じる" : "脆弱性を報告する";
       document.getElementById("report-form-slot").innerHTML = formOpen ? reportFormHTML() : "";
@@ -828,6 +847,7 @@
       <section class="panel narrow">
         <h2>マイページ</h2>
         <p class="muted">${isHunter ? "ハンター" : "企業"}アカウントの情報を編集できます。</p>
+        ${isHunter ? `<button class="btn ghost sm" id="go-myreports" type="button" style="margin-top:0.5rem">提出したレポートを見る →</button>` : ""}
 
         <div class="qr-box" style="margin-top:1.25rem">
           ${avatarUrl
@@ -866,6 +886,10 @@
     `;
 
     const form = document.getElementById("profile-form");
+    if (isHunter) {
+      const goReportsBtn = document.getElementById("go-myreports");
+      if (goReportsBtn) goReportsBtn.addEventListener("click", () => setTab("myreports"));
+    }
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(form);
@@ -915,6 +939,42 @@
         errEl.style.display = "block";
       }
     });
+  }
+
+  // ---------- マイレポート（自分が提出したレポート一覧） ----------
+  async function renderMyReports() {
+    const session = getSession();
+    if (!session || session.userType !== "hunter") { setTab("login"); return; }
+
+    main.innerHTML = `<div class="loading">読み込み中…</div>`;
+    let reports = [];
+    try {
+      const data = await apiGetAuthed(`/hunters/${session.id}/reports`);
+      reports = data.reports || [];
+    } catch (e) {
+      showToast("レポートの取得に失敗しました");
+    }
+
+    main.innerHTML = `
+      <section class="panel">
+        <div class="panel-head">
+          <h2>マイレポート</h2>
+          <button class="btn primary sm" id="go-programs-2">プログラム一覧へ</button>
+        </div>
+        ${reports.length === 0
+          ? `<div class="empty-state"><p>まだレポートを提出していません。</p></div>`
+          : `<ul class="report-list">${reports.map((r) => {
+              const sev = sevMeta(r.severity);
+              return `<li class="report-row">
+                <span class="severity-chip" style="--chip:${sev.color}"><i></i> ${sev.ja}</span>
+                <span class="report-title">${esc(r.title)}<br><span class="muted" style="font-size:0.75rem">${esc(r.program_company_name)}宛</span></span>
+                <span class="report-status">${esc(r.status)}</span>
+                <span class="card-date">${fmtDate(r.created_at)}</span>
+              </li>`;
+            }).join("")}</ul>`}
+      </section>
+    `;
+    document.getElementById("go-programs-2").addEventListener("click", () => setTab("programs"));
   }
 
   // ---------- ログイン ----------
@@ -1006,6 +1066,7 @@
     setTab("home");
   })();
 })();
+</script>
 </script>
 
 
