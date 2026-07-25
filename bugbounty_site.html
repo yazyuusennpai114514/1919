@@ -1,0 +1,567 @@
+<div class="app" id="app">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+    :root {
+      --bg: #0F1521;
+      --panel: #161D2B;
+      --panel-raised: #1D2537;
+      --border: #2A3349;
+      --text: #E8EAF0;
+      --text-muted: #8994AC;
+      --accent: #E8A33D;
+      --critical: #E5484D;
+      --high: #F0883E;
+      --medium: #E8C547;
+      --low: #5B8DEF;
+    }
+    * { box-sizing: border-box; }
+    .app {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans JP', sans-serif;
+      min-height: 100%;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 0.75rem; }
+    .brand { background: none; border: none; display: flex; align-items: baseline; gap: 0.35rem; cursor: pointer; color: var(--text); font-family: 'IBM Plex Mono', monospace; }
+    .brand-mark { color: var(--accent); font-size: 1.3rem; }
+    .brand-text { font-size: 1.15rem; font-weight: 600; letter-spacing: 0.02em; }
+    .brand-sub { color: var(--text-muted); font-weight: 400; }
+    .tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+    .tab { background: none; border: 1px solid transparent; color: var(--text-muted); font-family: 'Noto Sans JP', sans-serif; font-size: 0.85rem; padding: 0.5rem 0.85rem; border-radius: 6px; cursor: pointer; transition: all 0.15s ease; }
+    .tab:hover { color: var(--text); background: var(--panel-raised); }
+    .tab.active { color: var(--bg); background: var(--accent); font-weight: 500; }
+    .main { padding: 2rem 1.5rem 3rem; max-width: 960px; margin: 0 auto; }
+    .loading { text-align: center; padding: 4rem 0; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+    .hero { display: flex; flex-direction: column; gap: 2.5rem; padding-top: 1rem; }
+    .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.12em; color: var(--accent); margin: 0 0 0.75rem; }
+    .hero-copy h1 { font-family: 'IBM Plex Mono', monospace; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.35; font-weight: 600; margin: 0 0 1rem; }
+    .lead { color: var(--text-muted); font-size: 0.98rem; line-height: 1.8; max-width: 560px; margin: 0 0 1.5rem; }
+    .hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .btn { font-family: 'Noto Sans JP', sans-serif; font-size: 0.9rem; font-weight: 500; padding: 0.75rem 1.35rem; border-radius: 7px; border: 1px solid transparent; cursor: pointer; transition: transform 0.1s ease, opacity 0.15s ease; }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn.primary { background: var(--accent); color: #1A1204; }
+    .btn.primary:hover:not(:disabled) { opacity: 0.9; }
+    .btn.ghost { background: none; border-color: var(--border); color: var(--text); }
+    .btn.ghost:hover { background: var(--panel-raised); }
+    .btn.sm { padding: 0.5rem 0.9rem; font-size: 0.8rem; }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .stat { background: var(--panel); padding: 1.4rem 1rem; display: flex; flex-direction: column; gap: 0.4rem; border: none; cursor: default; color: var(--text); text-align: left; font-family: inherit; width: 100%; }
+    button.stat { cursor: pointer; }
+    button.stat:hover { background: var(--panel-raised); }
+    .stat-num { font-family: 'IBM Plex Mono', monospace; font-size: 2rem; font-weight: 600; color: var(--accent); }
+    .stat-label { font-size: 0.78rem; color: var(--text-muted); }
+    .section-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.5rem; }
+    .legend-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .severity-chip { display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; padding: 0.32rem 0.65rem; border-radius: 999px; border: 1px solid var(--chip); color: var(--chip); background: color-mix(in srgb, var(--chip) 12%, transparent); }
+    .severity-chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--chip); display: inline-block; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem; }
+    .panel.narrow { max-width: 620px; margin: 0 auto; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .panel-head h2, .panel-head h3 { margin: 0; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+    .empty-state { padding: 2.5rem 1rem; text-align: center; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 10px; }
+    .muted { color: var(--text-muted); font-size: 0.88rem; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .card { text-align: left; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem; cursor: pointer; color: var(--text); font-family: inherit; display: flex; flex-direction: column; gap: 0.6rem; transition: border-color 0.15s ease; width: 100%; }
+    .card:hover { border-color: var(--accent); }
+    .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+    .card-company { font-weight: 600; }
+    .card-date { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--text-muted); }
+    .card-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-meta { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+    .reward { color: var(--accent); }
+    .back { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; padding: 0; margin-bottom: 1.25rem; font-family: 'Noto Sans JP', sans-serif; }
+    .back:hover { color: var(--text); }
+    .detail-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
+    .detail-head h2 { margin: 0; font-family: 'IBM Plex Mono', monospace; }
+    .detail-desc { color: var(--text-muted); line-height: 1.7; margin: 0.75rem 0 1.5rem; }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.25rem; padding: 1.25rem; background: var(--panel-raised); border-radius: 10px; border: 1px solid var(--border); }
+    .detail-grid p:last-child { margin: 0; font-size: 0.9rem; white-space: pre-wrap; }
+    .report-list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+    .report-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0.9rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; flex-wrap: wrap; }
+    .report-title { flex: 1; font-size: 0.88rem; }
+    .report-status { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--text-muted); }
+    .form { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.25rem; }
+    .report-form { margin: 1.25rem 0 2rem; padding: 1.25rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; }
+    .field { display: flex; flex-direction: column; gap: 0.4rem; }
+    .field-label { font-size: 0.82rem; font-weight: 500; color: var(--text); }
+    .field-hint { font-size: 0.74rem; color: var(--text-muted); }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    input, textarea {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 0.65rem 0.8rem;
+      color: var(--text); font-family: 'Noto Sans JP', sans-serif; font-size: 0.9rem; resize: vertical; width: 100%;
+    }
+    input:focus, textarea:focus, .btn:focus-visible, .tab:focus-visible, .card:focus-visible, .sev-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .severity-select { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .sev-btn { display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; padding: 0.4rem 0.75rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); cursor: pointer; }
+    .sev-btn i { width: 6px; height: 6px; border-radius: 50%; background: var(--chip); display: inline-block; }
+    .sev-btn.active { border-color: var(--chip); color: var(--chip); background: color-mix(in srgb, var(--chip) 12%, transparent); }
+    .form-error { color: var(--critical); font-size: 0.82rem; margin: 0; }
+    .toast { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); background: var(--panel-raised); border: 1px solid var(--accent); color: var(--text); padding: 0.65rem 1.1rem; border-radius: 999px; font-size: 0.82rem; z-index: 50; font-family: 'IBM Plex Mono', monospace; display: none; }
+    .foot { text-align: center; padding: 1.25rem; color: var(--text-muted); font-size: 0.72rem; border-top: 1px solid var(--border); }
+    @media (max-width: 560px) {
+      .field-row { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: 1fr; }
+      .main { padding: 1.5rem 1rem 2.5rem; }
+    }
+  </style>
+
+  <header class="topbar">
+    <button class="brand" data-tab="home">
+      <span class="brand-mark">⌁</span>
+      <span class="brand-text">bughunter<span class="brand-sub">.uk</span></span>
+    </button>
+    <nav class="tabs">
+      <button class="tab" data-tab="home">概要</button>
+      <button class="tab" data-tab="programs">プログラム一覧</button>
+      <button class="tab" data-tab="company">企業として掲載</button>
+      <button class="tab" data-tab="hunter">ハンター登録</button>
+    </nav>
+  </header>
+
+  <div class="toast" id="toast"></div>
+
+  <main class="main" id="main">
+    <div class="loading">読み込み中…</div>
+  </main>
+
+  <footer class="foot">
+    このサイトは Cloudflare Workers + D1 上で動く本番APIに接続しています。
+  </footer>
+</div>
+
+<script>
+(function () {
+  // ここを自分のWorkers URLに合わせて変更してください
+  const API_BASE = "https://bbp.hosimatisutazio.workers.dev";
+
+  const SEVERITIES = [
+    { key: "critical", ja: "緊急", en: "Critical", color: "#E5484D" },
+    { key: "high", ja: "高", en: "High", color: "#F0883E" },
+    { key: "medium", ja: "中", en: "Medium", color: "#E8C547" },
+    { key: "low", ja: "低", en: "Low", color: "#5B8DEF" },
+  ];
+
+  const state = { tab: "home", programs: [], hunters: [], reportCount: 0, activeProgramId: null };
+
+  const main = document.getElementById("main");
+  const toastEl = document.getElementById("toast");
+  let toastTimer = null;
+
+  function sevMeta(key) { return SEVERITIES.find((s) => s.key === key) || SEVERITIES[2]; }
+  function fmtDate(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0");
+  }
+  function esc(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.style.display = "block";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.style.display = "none"; }, 3200);
+  }
+
+  // ---------- API呼び出し ----------
+  async function apiGet(path) {
+    const res = await fetch(`${API_BASE}${path}`);
+    if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+    return res.json();
+  }
+  async function apiPost(path, body) {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `POST ${path} failed: ${res.status}`);
+    return json;
+  }
+
+  // D1のsnake_caseキーをフロント表示用に正規化
+  function normalizeProgram(p) {
+    return {
+      id: p.id,
+      companyName: p.company_name,
+      contactEmail: p.contact_email,
+      scope: p.scope,
+      description: p.description,
+      rewardMin: p.reward_min,
+      rewardMax: p.reward_max,
+      createdAt: p.created_at,
+    };
+  }
+  function normalizeReport(r) {
+    return {
+      id: r.id,
+      programId: r.program_id,
+      title: r.title,
+      severity: r.severity,
+      description: r.description,
+      poc: r.poc,
+      contactEmail: r.contact_email,
+      status: r.status,
+      createdAt: r.created_at,
+    };
+  }
+
+  async function refreshPrograms() {
+    const data = await apiGet("/programs");
+    state.programs = (data.programs || []).map(normalizeProgram);
+  }
+  async function refreshHunters() {
+    const data = await apiGet("/hunters");
+    state.hunters = data.hunters || [];
+  }
+  // 全プログラムのレポート件数を合計してホーム画面の統計に使う（MVP規模向けの簡易実装）
+  async function refreshReportCount() {
+    try {
+      const counts = await Promise.all(
+        state.programs.map((p) => apiGet(`/programs/${p.id}/reports`).then((d) => (d.reports || []).length).catch(() => 0))
+      );
+      state.reportCount = counts.reduce((a, b) => a + b, 0);
+    } catch (e) {
+      state.reportCount = 0;
+    }
+  }
+
+  function setTab(tab) {
+    state.tab = tab;
+    state.activeProgramId = null;
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === tab));
+    render();
+  }
+
+  document.querySelectorAll("[data-tab]").forEach((el) => {
+    el.addEventListener("click", () => setTab(el.dataset.tab));
+  });
+
+  // ---------- render ----------
+  function render() {
+    if (state.tab === "home") return renderHome();
+    if (state.tab === "programs" && !state.activeProgramId) return renderProgramList();
+    if (state.tab === "programs" && state.activeProgramId) return renderProgramDetail();
+    if (state.tab === "company") return renderCompanyForm();
+    if (state.tab === "hunter") return renderHunterForm();
+  }
+
+  function renderHome() {
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "home"));
+    main.innerHTML = `
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">JAPAN-FOCUSED BUG BOUNTY PLATFORM</p>
+          <h1>脆弱性は、<br>見つけた人に還元する。</h1>
+          <p class="lead">日本企業向けの、月額固定費ゼロで始められるバグバウンティ運用サイトです。企業はプログラムを掲載し、ハンターは登録して脆弱性を報告します。</p>
+          <div class="hero-actions">
+            <button class="btn primary" id="cta-company">企業として掲載する</button>
+            <button class="btn ghost" id="cta-hunter">ハンターとして登録する</button>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <button class="stat" id="stat-programs">
+            <span class="stat-num">${String(state.programs.length).padStart(2, "0")}</span>
+            <span class="stat-label">掲載中のプログラム</span>
+          </button>
+          <div class="stat">
+            <span class="stat-num">${String(state.hunters.length).padStart(2, "0")}</span>
+            <span class="stat-label">登録ハンター</span>
+          </div>
+          <div class="stat">
+            <span class="stat-num">${String(state.reportCount).padStart(2, "0")}</span>
+            <span class="stat-label">提出レポート</span>
+          </div>
+        </div>
+        <div class="severity-legend">
+          <p class="section-label">重大度の分類</p>
+          <div class="legend-row">
+            ${SEVERITIES.map((s) => `<span class="severity-chip" style="--chip:${s.color}"><i></i> ${s.ja} / ${s.en}</span>`).join("")}
+          </div>
+        </div>
+      </section>
+    `;
+    document.getElementById("cta-company").addEventListener("click", () => setTab("company"));
+    document.getElementById("cta-hunter").addEventListener("click", () => setTab("hunter"));
+    document.getElementById("stat-programs").addEventListener("click", () => setTab("programs"));
+  }
+
+  function renderProgramList() {
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "programs"));
+    const cards = state.programs.map((p) => `
+      <button class="card" data-id="${p.id}">
+        <div class="card-top">
+          <span class="card-company">${esc(p.companyName)}</span>
+          <span class="card-date">${fmtDate(p.createdAt)}</span>
+        </div>
+        <p class="card-desc">${esc(p.description)}</p>
+        <div class="card-meta">
+          <span class="reward">¥${Number(p.rewardMin).toLocaleString()} 〜 ¥${Number(p.rewardMax).toLocaleString()}</span>
+        </div>
+      </button>
+    `).join("");
+
+    main.innerHTML = `
+      <section class="panel">
+        <div class="panel-head">
+          <h2>プログラム一覧</h2>
+          <button class="btn primary sm" id="go-company">+ プログラムを掲載</button>
+        </div>
+        ${state.programs.length === 0
+          ? `<div class="empty-state"><p>まだプログラムがありません。</p><p class="muted">企業として最初のプログラムを掲載してください。</p></div>`
+          : `<div class="card-grid">${cards}</div>`}
+      </section>
+    `;
+    document.getElementById("go-company").addEventListener("click", () => setTab("company"));
+    main.querySelectorAll(".card").forEach((el) => {
+      el.addEventListener("click", () => { state.activeProgramId = el.dataset.id; render(); });
+    });
+  }
+
+  async function renderProgramDetail() {
+    const program = state.programs.find((p) => p.id === state.activeProgramId);
+    if (!program) { state.activeProgramId = null; return renderProgramList(); }
+
+    main.innerHTML = `<div class="loading">読み込み中…</div>`;
+    let reports = [];
+    try {
+      const data = await apiGet(`/programs/${program.id}/reports`);
+      reports = (data.reports || []).map(normalizeReport);
+    } catch (e) {
+      showToast("レポートの取得に失敗しました");
+    }
+
+    main.innerHTML = `
+      <section class="panel">
+        <button class="back" id="back-btn">← プログラム一覧に戻る</button>
+        <div class="detail-head">
+          <h2>${esc(program.companyName)}</h2>
+          <span class="card-date">掲載日 ${fmtDate(program.createdAt)}</span>
+        </div>
+        <p class="detail-desc">${esc(program.description)}</p>
+        <div class="detail-grid">
+          <div><p class="section-label">対象スコープ</p><p>${esc(program.scope)}</p></div>
+          <div><p class="section-label">報奨金レンジ</p><p>¥${Number(program.rewardMin).toLocaleString()} 〜 ¥${Number(program.rewardMax).toLocaleString()}</p></div>
+          <div><p class="section-label">連絡先</p><p>${esc(program.contactEmail)}</p></div>
+        </div>
+        <div class="panel-head" style="margin-top:2rem">
+          <h3>提出済みレポート（${reports.length}）</h3>
+          <button class="btn primary sm" id="toggle-report-form">脆弱性を報告する</button>
+        </div>
+        <div id="report-form-slot"></div>
+        ${reports.length === 0
+          ? `<div class="empty-state"><p>まだレポートがありません。</p></div>`
+          : `<ul class="report-list">${reports.map((r) => {
+              const sev = sevMeta(r.severity);
+              return `<li class="report-row">
+                <span class="severity-chip" style="--chip:${sev.color}"><i></i> ${sev.ja}</span>
+                <span class="report-title">${esc(r.title)}</span>
+                <span class="report-status">${esc(r.status)}</span>
+                <span class="card-date">${fmtDate(r.createdAt)}</span>
+              </li>`;
+            }).join("")}</ul>`}
+      </section>
+    `;
+    document.getElementById("back-btn").addEventListener("click", () => { state.activeProgramId = null; render(); });
+
+    let formOpen = false;
+    document.getElementById("toggle-report-form").addEventListener("click", (e) => {
+      formOpen = !formOpen;
+      e.target.textContent = formOpen ? "フォームを閉じる" : "脆弱性を報告する";
+      document.getElementById("report-form-slot").innerHTML = formOpen ? reportFormHTML() : "";
+      if (formOpen) bindReportForm(program.id);
+    });
+  }
+
+  function reportFormHTML() {
+    return `
+      <form class="form report-form" id="report-form">
+        <label class="field">
+          <span class="field-label">脆弱性のタイトル *</span>
+          <input name="title" placeholder="例: ログイン画面における反射型XSS">
+        </label>
+        <label class="field">
+          <span class="field-label">重大度 *</span>
+          <div class="severity-select">
+            ${SEVERITIES.map((s, i) => `<button type="button" class="sev-btn${i === 2 ? " active" : ""}" data-sev="${s.key}" style="--chip:${s.color}"><i></i> ${s.ja}</button>`).join("")}
+          </div>
+          <input type="hidden" name="severity" value="medium">
+        </label>
+        <label class="field">
+          <span class="field-label">詳細な説明 *</span>
+          <span class="field-hint">影響範囲や再現条件を含めてください</span>
+          <textarea name="description" rows="4" placeholder="発見した脆弱性の内容と想定される影響"></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">再現手順（PoC）</span>
+          <textarea name="poc" rows="3" placeholder="1. ... 2. ... 3. ..."></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">連絡先メールアドレス *</span>
+          <input type="email" name="contactEmail" placeholder="you@example.com">
+        </label>
+        <p class="form-error" id="report-error" style="display:none"></p>
+        <button class="btn primary" type="submit">レポートを提出する</button>
+      </form>
+    `;
+  }
+
+  function bindReportForm(programId) {
+    const form = document.getElementById("report-form");
+    form.querySelectorAll(".sev-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        form.querySelectorAll(".sev-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        form.querySelector("[name=severity]").value = btn.dataset.sev;
+      });
+    });
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const data = Object.fromEntries(fd.entries());
+      const errEl = document.getElementById("report-error");
+      if (!data.title || !data.description || !data.contactEmail) {
+        errEl.textContent = "タイトル・内容・連絡先は必須です";
+        errEl.style.display = "block";
+        return;
+      }
+      errEl.style.display = "none";
+      const submitBtn = form.querySelector("button[type=submit]");
+      submitBtn.disabled = true; submitBtn.textContent = "提出中…";
+      try {
+        await apiPost("/reports", { ...data, programId });
+        showToast("レポートを提出しました");
+        render();
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "レポートを提出する";
+        showToast(err.message || "保存に失敗しました。もう一度お試しください");
+      }
+    });
+  }
+
+  function renderCompanyForm() {
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "company"));
+    main.innerHTML = `
+      <section class="panel narrow">
+        <h2>プログラムを掲載する</h2>
+        <p class="muted">月額費用はかかりません。報奨金が支払われた際にのみ手数料が発生します。</p>
+        <form class="form" id="company-form">
+          <label class="field"><span class="field-label">会社名 *</span><input name="companyName" placeholder="株式会社サンプル"></label>
+          <label class="field"><span class="field-label">連絡先メールアドレス *</span><input type="email" name="contactEmail" placeholder="security@example.co.jp"></label>
+          <label class="field">
+            <span class="field-label">対象スコープ *</span>
+            <span class="field-hint">対象ドメイン・アプリ・除外範囲を明記してください</span>
+            <textarea name="scope" rows="3" placeholder="例: *.example.co.jp のWebアプリケーション全般（決済ページを除く）"></textarea>
+          </label>
+          <div class="field-row">
+            <label class="field"><span class="field-label">報奨金 下限（円）</span><input type="number" min="0" name="rewardMin" placeholder="10000"></label>
+            <label class="field"><span class="field-label">報奨金 上限（円）</span><input type="number" min="0" name="rewardMax" placeholder="300000"></label>
+          </div>
+          <label class="field">
+            <span class="field-label">プログラムの説明 *</span>
+            <textarea name="description" rows="4" placeholder="プログラムの目的、審査基準、セーフハーバーの範囲など"></textarea>
+          </label>
+          <p class="form-error" id="company-error" style="display:none"></p>
+          <button class="btn primary" type="submit">プログラムを掲載する</button>
+        </form>
+      </section>
+    `;
+    const form = document.getElementById("company-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const data = Object.fromEntries(fd.entries());
+      const errEl = document.getElementById("company-error");
+      if (!data.companyName || !data.contactEmail || !data.scope || !data.description) {
+        errEl.textContent = "すべての必須項目を入力してください";
+        errEl.style.display = "block";
+        return;
+      }
+      const rMin = Number(data.rewardMin) || 0;
+      const rMax = Number(data.rewardMax) || 0;
+      if (rMin > rMax) {
+        errEl.textContent = "報奨金の下限は上限以下にしてください";
+        errEl.style.display = "block";
+        return;
+      }
+      errEl.style.display = "none";
+      const submitBtn = form.querySelector("button[type=submit]");
+      submitBtn.disabled = true; submitBtn.textContent = "掲載中…";
+      try {
+        await apiPost("/programs", { ...data, rewardMin: rMin, rewardMax: rMax });
+        await refreshPrograms();
+        showToast("プログラムを掲載しました");
+        setTab("programs");
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "プログラムを掲載する";
+        showToast(err.message || "保存に失敗しました。もう一度お試しください");
+      }
+    });
+  }
+
+  function renderHunterForm() {
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "hunter"));
+    main.innerHTML = `
+      <section class="panel narrow">
+        <h2>ハンターとして登録する</h2>
+        <p class="muted">登録後、掲載中のプログラムに対してレポートを提出できるようになります。</p>
+        <form class="form" id="hunter-form">
+          <label class="field"><span class="field-label">ハンドルネーム *</span><input name="handle" placeholder="例: shirokuma_sec"></label>
+          <label class="field"><span class="field-label">連絡先メールアドレス *</span><input type="email" name="email" placeholder="you@example.com"></label>
+          <label class="field">
+            <span class="field-label">得意分野</span>
+            <span class="field-hint">Web / モバイル / インフラ / スマートコントラクトなど</span>
+            <input name="skills" placeholder="例: Webアプリ診断、API、認証まわり">
+          </label>
+          <label class="field"><span class="field-label">実績・ポートフォリオURL</span><input name="portfolio" placeholder="HackerOneプロフィール、GitHubなど"></label>
+          <p class="form-error" id="hunter-error" style="display:none"></p>
+          <button class="btn primary" type="submit">登録する</button>
+        </form>
+      </section>
+    `;
+    const form = document.getElementById("hunter-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const data = Object.fromEntries(fd.entries());
+      const errEl = document.getElementById("hunter-error");
+      if (!data.handle || !data.email) {
+        errEl.textContent = "ハンドルネームとメールアドレスは必須です";
+        errEl.style.display = "block";
+        return;
+      }
+      errEl.style.display = "none";
+      const submitBtn = form.querySelector("button[type=submit]");
+      submitBtn.disabled = true; submitBtn.textContent = "登録中…";
+      try {
+        await apiPost("/hunters", data);
+        await refreshHunters();
+        showToast("ハンター登録が完了しました");
+        setTab("home");
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "登録する";
+        showToast(err.message || "保存に失敗しました。もう一度お試しください");
+      }
+    });
+  }
+
+  // ---------- init ----------
+  (async function init() {
+    try {
+      await refreshPrograms();
+      await refreshHunters();
+      await refreshReportCount();
+    } catch (e) {
+      showToast("APIへの接続に失敗しました");
+    }
+    setTab("home");
+  })();
+})();
+</script>
