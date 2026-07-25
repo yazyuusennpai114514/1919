@@ -5,7 +5,7 @@
   <title>bughunter</title>
 </head>
 <body>
-  <div class="app" id="app">
+<div class="app" id="app">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -159,7 +159,6 @@
   </footer>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 (function () {
   // ここを自分のWorkers URLに合わせて変更してください
@@ -688,7 +687,7 @@
         </div>
 
         <div class="qr-box">
-          <canvas id="qr-canvas"></canvas>
+          <img id="qr-image" width="220" height="220" alt="QRコード" style="border-radius:8px; background:#fff; padding:8px;">
           <p class="secret-text">手動入力する場合のキー:<br>${esc(enrollData.secret)}</p>
         </div>
 
@@ -710,10 +709,9 @@
       </section>
     `;
 
-    // QRコードを描画
-    QRCode.toCanvas(document.getElementById("qr-canvas"), enrollData.otpauthUrl, { width: 220 }, (err) => {
-      if (err) console.error("QR generation error:", err);
-    });
+    // QRコードを画像APIで生成（外部JSライブラリ不要）
+    const qrImg = document.getElementById("qr-image");
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(enrollData.otpauthUrl)}`;
 
     // バックアップコードのダウンロード
     document.getElementById("download-codes").addEventListener("click", () => {
@@ -868,6 +866,7 @@
   })();
 })();
 </script>
+
 </body>
 </html>
 
