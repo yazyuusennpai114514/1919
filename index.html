@@ -141,9 +141,10 @@
     <nav class="tabs">
       <button class="tab" data-tab="home">概要</button>
       <button class="tab" data-tab="programs">プログラム一覧</button>
-      <button class="tab" data-tab="company">企業として掲載</button>
-      <button class="tab" data-tab="hunter">ハンター登録</button>
-      <button class="tab" data-tab="login">ログイン</button>
+      <button class="tab guest-only" data-tab="company">企業として掲載</button>
+      <button class="tab guest-only" data-tab="hunter">ハンター登録</button>
+      <button class="tab guest-only" data-tab="login">ログイン</button>
+      <button class="tab auth-only" data-tab="myprofile" style="display:none">マイページ</button>
     </nav>
     <div class="auth-status" id="auth-status"></div>
   </header>
@@ -265,7 +266,14 @@
     clearSession();
   }
 
+  function updateNavVisibility() {
+    const session = getSession();
+    document.querySelectorAll(".guest-only").forEach((el) => { el.style.display = session ? "none" : ""; });
+    document.querySelectorAll(".auth-only").forEach((el) => { el.style.display = session ? "" : "none"; });
+  }
+
   function renderAuthStatus() {
+    updateNavVisibility();
     const el = document.getElementById("auth-status");
     const session = getSession();
     if (!session) {
@@ -334,6 +342,11 @@
   }
 
   function setTab(tab) {
+    const session = getSession();
+    // ログイン中は登録・ログイン画面の代わりにプログラム一覧へ誘導
+    if (session && (tab === "company" || tab === "hunter" || tab === "login")) {
+      tab = "programs";
+    }
     state.tab = tab;
     state.activeProgramId = null;
     document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === tab));
@@ -352,6 +365,7 @@
     if (state.tab === "company") return renderCompanyForm();
     if (state.tab === "hunter") return renderHunterForm();
     if (state.tab === "login") return renderLogin();
+    if (state.tab === "myprofile") return renderMyProfile();
   }
 
   function renderHome() {
@@ -776,6 +790,133 @@
     return json;
   }
 
+  async function apiPatch(path, body) {
+    const session = getSession();
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `PATCH ${path} failed: ${res.status}`);
+    return json;
+  }
+
+  // ---------- マイページ（プロフィール編集） ----------
+  async function renderMyProfile() {
+    const session = getSession();
+    if (!session) { setTab("login"); return; }
+
+    main.innerHTML = `<div class="loading">読み込み中…</div>`;
+    let me;
+    try {
+      me = await apiGetAuthed("/auth/me");
+    } catch (e) {
+      showToast("プロフィールの取得に失敗しました。再度ログインしてください");
+      await apiLogout();
+      setTab("login");
+      return;
+    }
+
+    const isHunter = session.userType === "hunter";
+    const avatarUrl = me.avatar_key ? `${API_BASE}/avatars/${me.avatar_key}` : null;
+
+    main.innerHTML = `
+      <section class="panel narrow">
+        <h2>マイページ</h2>
+        <p class="muted">${isHunter ? "ハンター" : "企業"}アカウントの情報を編集できます。</p>
+
+        <div class="qr-box" style="margin-top:1.25rem">
+          ${avatarUrl
+            ? `<img class="avatar avatar-lg" src="${avatarUrl}" alt="">`
+            : `<div class="avatar avatar-lg avatar-placeholder">${esc((isHunter ? me.handle : me.company_name || "?")[0])}</div>`}
+          <label class="field" style="width:100%">
+            <span class="field-label">画像を変更</span>
+            <input type="file" id="profile-avatar-file" accept="image/png,image/jpeg,image/webp,image/gif">
+          </label>
+        </div>
+
+        <form class="form" id="profile-form">
+          ${isHunter ? `
+            <label class="field"><span class="field-label">ハンドルネーム *</span><input name="handle" value="${esc(me.handle)}"></label>
+            <label class="field"><span class="field-label">得意分野</span><input name="skills" value="${esc(me.skills || "")}"></label>
+            <label class="field"><span class="field-label">実績・ポートフォリオURL</span><input name="portfolio" value="${esc(me.portfolio || "")}"></label>
+          ` : `
+            <label class="field"><span class="field-label">会社名 *</span><input name="companyName" value="${esc(me.company_name)}"></label>
+            <label class="field">
+              <span class="field-label">対象スコープ *</span>
+              <textarea name="scope" rows="3">${esc(me.scope)}</textarea>
+            </label>
+            <div class="field-row">
+              <label class="field"><span class="field-label">報奨金 下限（円）</span><input type="number" min="0" name="rewardMin" value="${me.reward_min}"></label>
+              <label class="field"><span class="field-label">報奨金 上限（円）</span><input type="number" min="0" name="rewardMax" value="${me.reward_max}"></label>
+            </div>
+            <label class="field">
+              <span class="field-label">プログラムの説明 *</span>
+              <textarea name="description" rows="4">${esc(me.description)}</textarea>
+            </label>
+          `}
+          <p class="form-error" id="profile-error" style="display:none"></p>
+          <button class="btn primary" type="submit">保存する</button>
+        </form>
+      </section>
+    `;
+
+    const form = document.getElementById("profile-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const data = Object.fromEntries(fd.entries());
+      const errEl = document.getElementById("profile-error");
+      const submitBtn = form.querySelector("button[type=submit]");
+
+      if (isHunter && !data.handle) {
+        errEl.textContent = "ハンドルネームは必須です";
+        errEl.style.display = "block";
+        return;
+      }
+      if (!isHunter && (!data.companyName || !data.scope || !data.description)) {
+        errEl.textContent = "会社名・スコープ・説明は必須です";
+        errEl.style.display = "block";
+        return;
+      }
+
+      errEl.style.display = "none";
+      submitBtn.disabled = true; submitBtn.textContent = "保存中…";
+
+      try {
+        const path = isHunter ? `/hunters/${session.id}` : `/programs/${session.id}`;
+        const payload = isHunter
+          ? { handle: data.handle, skills: data.skills, portfolio: data.portfolio }
+          : {
+              companyName: data.companyName,
+              scope: data.scope,
+              description: data.description,
+              rewardMin: Number(data.rewardMin) || 0,
+              rewardMax: Number(data.rewardMax) || 0,
+            };
+        await apiPatch(path, payload);
+
+        const avatarFile = document.getElementById("profile-avatar-file").files[0];
+        if (avatarFile) {
+          await apiUploadAvatar(isHunter ? "hunters" : "programs", session.id, avatarFile);
+        }
+
+        setSession({ ...session, name: isHunter ? data.handle : data.companyName });
+        await Promise.all([refreshPrograms(), refreshHunters()]);
+        showToast("プロフィールを更新しました");
+        setTab("myprofile");
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "保存する";
+        errEl.textContent = err.message || "更新に失敗しました";
+        errEl.style.display = "block";
+      }
+    });
+  }
+
   // ---------- ログイン ----------
   function renderLogin() {
     document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "login"));
@@ -866,6 +1007,7 @@
   })();
 })();
 </script>
+
 
 </body>
 </html>
