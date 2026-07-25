@@ -5,8 +5,7 @@
   <title>bughunter</title>
 </head>
 <body>
-
-<div class="app" id="app">
+  <div class="app" id="app">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -110,7 +109,23 @@
     .sev-btn.active { border-color: var(--chip); color: var(--chip); background: color-mix(in srgb, var(--chip) 12%, transparent); }
     .form-error { color: var(--critical); font-size: 0.82rem; margin: 0; }
     .toast { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); background: var(--panel-raised); border: 1px solid var(--accent); color: var(--text); padding: 0.65rem 1.1rem; border-radius: 999px; font-size: 0.82rem; z-index: 50; font-family: 'IBM Plex Mono', monospace; display: none; }
+    .avatar { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--bg); border: 1px solid var(--border); flex-shrink: 0; }
+    .avatar-lg { width: 64px; height: 64px; border-radius: 10px; }
+    .avatar-placeholder { display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; color: var(--text-muted); font-size: 0.9rem; }
+    .avatar-picker { display: flex; align-items: center; gap: 0.9rem; }
+    .avatar-picker input[type="file"] { width: auto; padding: 0.4rem 0; font-size: 0.8rem; color: var(--text-muted); }
     .foot { text-align: center; padding: 1.25rem; color: var(--text-muted); font-size: 0.72rem; border-top: 1px solid var(--border); }
+    .auth-status { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
+    .auth-status .who { font-family: 'IBM Plex Mono', monospace; color: var(--text); }
+    .enroll-warning { background: color-mix(in srgb, var(--critical) 12%, transparent); border: 1px solid var(--critical); color: var(--text); padding: 0.9rem 1rem; border-radius: 8px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 1.5rem; }
+    .qr-box { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1.5rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 1.5rem; }
+    .qr-box canvas { border-radius: 8px; }
+    .secret-text { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--text-muted); word-break: break-all; text-align: center; }
+    .backup-codes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    .backup-codes span { font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; color: var(--text); }
+    .code-input { font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; }
+    .login-type-toggle { display: flex; gap: 0.5rem; }
+    .login-type-toggle button { flex: 1; }
     @media (max-width: 560px) {
       .field-row { grid-template-columns: 1fr; }
       .stat-grid { grid-template-columns: 1fr; }
@@ -128,7 +143,9 @@
       <button class="tab" data-tab="programs">プログラム一覧</button>
       <button class="tab" data-tab="company">企業として掲載</button>
       <button class="tab" data-tab="hunter">ハンター登録</button>
+      <button class="tab" data-tab="login">ログイン</button>
     </nav>
+    <div class="auth-status" id="auth-status"></div>
   </header>
 
   <div class="toast" id="toast"></div>
@@ -142,6 +159,7 @@
   </footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 (function () {
   // ここを自分のWorkers URLに合わせて変更してください
@@ -194,6 +212,80 @@
     return json;
   }
 
+  // 画像アップロード（multipart/form-data、本人のトークンが必要）
+  async function apiUploadAvatar(type, id, file) {
+    const fd = new FormData();
+    fd.append("avatar", file);
+    const session = getSession();
+    const res = await fetch(`${API_BASE}/${type}/${id}/avatar`, {
+      method: "POST",
+      headers: session ? { Authorization: `Bearer ${session.token}` } : {},
+      body: fd,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || "画像のアップロードに失敗しました");
+    return json;
+  }
+
+  // ---------- セッション（ローカルストレージ） ----------
+  const SESSION_KEY = "bbp_session";
+  function getSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function setSession(session) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    renderAuthStatus();
+  }
+  function clearSession() {
+    localStorage.removeItem(SESSION_KEY);
+    renderAuthStatus();
+  }
+
+  async function apiConfirmTotp(type, id, code) {
+    return apiPost(`/${type}/${id}/confirm-totp`, { code });
+  }
+  async function apiLogin(userType, email, code) {
+    return apiPost("/auth/login", { userType, email, code });
+  }
+  async function apiLogout() {
+    const session = getSession();
+    if (!session) return;
+    try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch (e) {
+      // ネットワークエラーでもローカルのセッションは消す
+    }
+    clearSession();
+  }
+
+  function renderAuthStatus() {
+    const el = document.getElementById("auth-status");
+    const session = getSession();
+    if (!session) {
+      el.innerHTML = "";
+      return;
+    }
+    const label = session.userType === "hunter" ? "ハンター" : "企業";
+    el.innerHTML = `
+      <span class="who">${esc(session.name || "")}</span>
+      <span class="muted">(${label})</span>
+      <button class="btn ghost sm" id="logout-btn">ログアウト</button>
+    `;
+    document.getElementById("logout-btn").addEventListener("click", async () => {
+      await apiLogout();
+      showToast("ログアウトしました");
+      setTab("home");
+    });
+  }
+
   // D1のsnake_caseキーをフロント表示用に正規化
   function normalizeProgram(p) {
     return {
@@ -204,6 +296,7 @@
       description: p.description,
       rewardMin: p.reward_min,
       rewardMax: p.reward_max,
+      avatarUrl: p.avatar_key ? `${API_BASE}/avatars/${p.avatar_key}` : null,
       createdAt: p.created_at,
     };
   }
@@ -259,6 +352,7 @@
     if (state.tab === "programs" && state.activeProgramId) return renderProgramDetail();
     if (state.tab === "company") return renderCompanyForm();
     if (state.tab === "hunter") return renderHunterForm();
+    if (state.tab === "login") return renderLogin();
   }
 
   function renderHome() {
@@ -306,7 +400,12 @@
     const cards = state.programs.map((p) => `
       <button class="card" data-id="${p.id}">
         <div class="card-top">
-          <span class="card-company">${esc(p.companyName)}</span>
+          <div style="display:flex; align-items:center; gap:0.6rem;">
+            ${p.avatarUrl
+              ? `<img class="avatar" src="${p.avatarUrl}" alt="">`
+              : `<div class="avatar avatar-placeholder">${esc((p.companyName || "?")[0])}</div>`}
+            <span class="card-company">${esc(p.companyName)}</span>
+          </div>
           <span class="card-date">${fmtDate(p.createdAt)}</span>
         </div>
         <p class="card-desc">${esc(p.description)}</p>
@@ -350,7 +449,12 @@
       <section class="panel">
         <button class="back" id="back-btn">← プログラム一覧に戻る</button>
         <div class="detail-head">
-          <h2>${esc(program.companyName)}</h2>
+          <div style="display:flex; align-items:center; gap:0.9rem;">
+            ${program.avatarUrl
+              ? `<img class="avatar avatar-lg" src="${program.avatarUrl}" alt="">`
+              : `<div class="avatar avatar-lg avatar-placeholder">${esc((program.companyName || "?")[0])}</div>`}
+            <h2 style="margin:0;">${esc(program.companyName)}</h2>
+          </div>
           <span class="card-date">掲載日 ${fmtDate(program.createdAt)}</span>
         </div>
         <p class="detail-desc">${esc(program.description)}</p>
@@ -461,9 +565,13 @@
         <h2>プログラムを掲載する</h2>
         <p class="muted">月額費用はかかりません。報奨金が支払われた際にのみ手数料が発生します。</p>
         <form class="form" id="company-form">
+          <label class="field">
+            <span class="field-label">会社ロゴ</span>
+            <span class="field-hint">png / jpeg / webp / gif、2MBまで（後からでも設定できます）</span>
+            <input type="file" name="avatarFile" accept="image/png,image/jpeg,image/webp,image/gif">
+          </label>
           <label class="field"><span class="field-label">会社名 *</span><input name="companyName" placeholder="株式会社サンプル"></label>
           <label class="field"><span class="field-label">連絡先メールアドレス *</span><input type="email" name="contactEmail" placeholder="security@example.co.jp"></label>
-          <label class="field"><span class="field-label">パスワード *</span><span class="field-hint">8文字以上</span><input type="password" name="password" minlength="8"></label>
           <label class="field">
             <span class="field-label">対象スコープ *</span>
             <span class="field-hint">対象ドメイン・アプリ・除外範囲を明記してください</span>
@@ -486,15 +594,12 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(form);
+      const avatarFile = fd.get("avatarFile");
+      fd.delete("avatarFile");
       const data = Object.fromEntries(fd.entries());
       const errEl = document.getElementById("company-error");
-      if (!data.companyName || !data.contactEmail || !data.scope || !data.description || !data.password) {
+      if (!data.companyName || !data.contactEmail || !data.scope || !data.description) {
         errEl.textContent = "すべての必須項目を入力してください";
-        errEl.style.display = "block";
-        return;
-      }
-      if (data.password.length < 8) {
-        errEl.textContent = "パスワードは8文字以上で入力してください";
         errEl.style.display = "block";
         return;
       }
@@ -507,12 +612,10 @@
       }
       errEl.style.display = "none";
       const submitBtn = form.querySelector("button[type=submit]");
-      submitBtn.disabled = true; submitBtn.textContent = "掲載中…";
+      submitBtn.disabled = true; submitBtn.textContent = "登録中…";
       try {
-        await apiPost("/programs", { ...data, rewardMin: rMin, rewardMax: rMax });
-        await refreshPrograms();
-        showToast("プログラムを掲載しました");
-        setTab("programs");
+        const result = await apiPost("/programs", { ...data, rewardMin: rMin, rewardMax: rMax });
+        renderTotpEnroll("program", result, avatarFile);
       } catch (err) {
         submitBtn.disabled = false; submitBtn.textContent = "プログラムを掲載する";
         showToast(err.message || "保存に失敗しました。もう一度お試しください");
@@ -527,9 +630,13 @@
         <h2>ハンターとして登録する</h2>
         <p class="muted">登録後、掲載中のプログラムに対してレポートを提出できるようになります。</p>
         <form class="form" id="hunter-form">
+          <label class="field">
+            <span class="field-label">プロフィール画像</span>
+            <span class="field-hint">png / jpeg / webp / gif、2MBまで（後からでも設定できます）</span>
+            <input type="file" name="avatarFile" accept="image/png,image/jpeg,image/webp,image/gif">
+          </label>
           <label class="field"><span class="field-label">ハンドルネーム *</span><input name="handle" placeholder="例: shirokuma_sec"></label>
           <label class="field"><span class="field-label">連絡先メールアドレス *</span><input type="email" name="email" placeholder="you@example.com"></label>
-          <label class="field"><span class="field-label">パスワード *</span><span class="field-hint">8文字以上</span><input type="password" name="password" minlength="8"></label>
           <label class="field">
             <span class="field-label">得意分野</span>
             <span class="field-hint">Web / モバイル / インフラ / スマートコントラクトなど</span>
@@ -545,15 +652,12 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(form);
+      const avatarFile = fd.get("avatarFile");
+      fd.delete("avatarFile");
       const data = Object.fromEntries(fd.entries());
       const errEl = document.getElementById("hunter-error");
-      if (!data.handle || !data.email || !data.password) {
-        errEl.textContent = "ハンドルネーム・メールアドレス・パスワードは必須です";
-        errEl.style.display = "block";
-        return;
-      }
-      if (data.password.length < 8) {
-        errEl.textContent = "パスワードは8文字以上で入力してください";
+      if (!data.handle || !data.email) {
+        errEl.textContent = "ハンドルネームとメールアドレスは必須です";
         errEl.style.display = "block";
         return;
       }
@@ -561,13 +665,181 @@
       const submitBtn = form.querySelector("button[type=submit]");
       submitBtn.disabled = true; submitBtn.textContent = "登録中…";
       try {
-        await apiPost("/hunters", data);
-        await refreshHunters();
-        showToast("ハンター登録が完了しました");
-        setTab("home");
+        const result = await apiPost("/hunters", data);
+        renderTotpEnroll("hunter", result, avatarFile);
       } catch (err) {
         submitBtn.disabled = false; submitBtn.textContent = "登録する";
         showToast(err.message || "保存に失敗しました。もう一度お試しください");
+      }
+    });
+  }
+
+  // ---------- TOTP紐付け（QRコード表示 → 認証アプリでスキャン → 6桁コードで確認） ----------
+  function renderTotpEnroll(userType, enrollData, avatarFile) {
+    const typePath = userType === "hunter" ? "hunters" : "programs";
+    document.querySelectorAll(".tab").forEach((el) => el.classList.remove("active"));
+
+    main.innerHTML = `
+      <section class="panel narrow">
+        <h2>認証アプリを設定してください</h2>
+        <div class="enroll-warning">
+          この画面を閉じると、シークレットとバックアップコードは二度と表示されません。<br>
+          必ず今のうちにスキャン・保存してください。
+        </div>
+
+        <div class="qr-box">
+          <canvas id="qr-canvas"></canvas>
+          <p class="secret-text">手動入力する場合のキー:<br>${esc(enrollData.secret)}</p>
+        </div>
+
+        <p class="section-label">バックアップコード（各1回のみ使用可）</p>
+        <p class="muted">スマホを紛失した際、これらのコードでログインできます。安全な場所に保存してください。</p>
+        <div class="backup-codes" id="backup-codes">
+          ${enrollData.backupCodes.map((code) => `<span>${esc(code)}</span>`).join("")}
+        </div>
+        <button class="btn ghost sm" id="download-codes" type="button">バックアップコードをダウンロード</button>
+
+        <form class="form" id="confirm-form" style="margin-top:1.75rem">
+          <label class="field">
+            <span class="field-label">認証アプリに表示されている6桁のコードを入力</span>
+            <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000">
+          </label>
+          <p class="form-error" id="confirm-error" style="display:none"></p>
+          <button class="btn primary" type="submit">確認して完了する</button>
+        </form>
+      </section>
+    `;
+
+    // QRコードを描画
+    QRCode.toCanvas(document.getElementById("qr-canvas"), enrollData.otpauthUrl, { width: 220 }, (err) => {
+      if (err) console.error("QR generation error:", err);
+    });
+
+    // バックアップコードのダウンロード
+    document.getElementById("download-codes").addEventListener("click", () => {
+      const text = `bughunter.uk バックアップコード\n\n${enrollData.backupCodes.join("\n")}\n\n各コードは1回だけ使用できます。大切に保管してください。`;
+      const blob = new Blob([text], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bughunter-backup-codes.txt";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // コード確認
+    const confirmForm = document.getElementById("confirm-form");
+    confirmForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = new FormData(confirmForm).get("code");
+      const errEl = document.getElementById("confirm-error");
+      const submitBtn = confirmForm.querySelector("button[type=submit]");
+      submitBtn.disabled = true; submitBtn.textContent = "確認中…";
+      try {
+        const confirmResult = await apiConfirmTotp(typePath, enrollData.id, code);
+        setSession({
+          token: confirmResult.token,
+          userType,
+          id: enrollData.id,
+          name: userType === "hunter" ? null : null,
+        });
+        // 名前が未取得なので/auth/meで補完
+        try {
+          const me = await apiGetAuthed("/auth/me");
+          setSession({ token: confirmResult.token, userType, id: enrollData.id, name: userType === "hunter" ? me.handle : me.company_name });
+        } catch (e) {}
+
+        if (avatarFile && avatarFile.size > 0) {
+          try {
+            await apiUploadAvatar(typePath, enrollData.id, avatarFile);
+          } catch (uploadErr) {
+            showToast("登録は完了しましたが、画像のアップロードに失敗しました");
+          }
+        }
+
+        await Promise.all([refreshPrograms(), refreshHunters()]);
+        showToast("設定が完了しました。ログインしました");
+        setTab("home");
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "確認して完了する";
+        errEl.textContent = err.message || "コードが正しくありません";
+        errEl.style.display = "block";
+      }
+    });
+  }
+
+  async function apiGetAuthed(path) {
+    const session = getSession();
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: session ? { Authorization: `Bearer ${session.token}` } : {},
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `GET ${path} failed`);
+    return json;
+  }
+
+  // ---------- ログイン ----------
+  function renderLogin() {
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "login"));
+    main.innerHTML = `
+      <section class="panel narrow">
+        <h2>ログイン</h2>
+        <p class="muted">メールアドレスと、認証アプリに表示されている6桁のコードを入力してください。</p>
+        <form class="form" id="login-form">
+          <label class="field">
+            <span class="field-label">アカウント種別</span>
+            <div class="login-type-toggle">
+              <button type="button" class="btn ghost sm active-type" data-type="hunter">ハンター</button>
+              <button type="button" class="btn ghost sm" data-type="program">企業</button>
+            </div>
+            <input type="hidden" name="userType" value="hunter">
+          </label>
+          <label class="field"><span class="field-label">メールアドレス *</span><input type="email" name="email" placeholder="you@example.com"></label>
+          <label class="field">
+            <span class="field-label">6桁のコード（またはバックアップコード） *</span>
+            <input class="code-input" name="code" inputmode="numeric" maxlength="11" placeholder="000000">
+          </label>
+          <p class="form-error" id="login-error" style="display:none"></p>
+          <button class="btn primary" type="submit">ログイン</button>
+        </form>
+      </section>
+    `;
+
+    const form = document.getElementById("login-form");
+    form.querySelectorAll(".login-type-toggle button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        form.querySelectorAll(".login-type-toggle button").forEach((b) => b.classList.remove("active-type"));
+        btn.classList.add("active-type");
+        form.querySelector("[name=userType]").value = btn.dataset.type;
+      });
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const data = Object.fromEntries(fd.entries());
+      const errEl = document.getElementById("login-error");
+      if (!data.email || !data.code) {
+        errEl.textContent = "メールアドレスとコードを入力してください";
+        errEl.style.display = "block";
+        return;
+      }
+      errEl.style.display = "none";
+      const submitBtn = form.querySelector("button[type=submit]");
+      submitBtn.disabled = true; submitBtn.textContent = "ログイン中…";
+      try {
+        const result = await apiLogin(data.userType, data.email, data.code);
+        setSession({ token: result.token, userType: result.userType, id: result.id, name: result.name });
+        if (result.usedBackupCode) {
+          showToast(`バックアップコードでログインしました。残り${result.backupCodesRemaining}個です`);
+        } else {
+          showToast("ログインしました");
+        }
+        setTab("home");
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "ログイン";
+        errEl.textContent = err.message || "ログインに失敗しました";
+        errEl.style.display = "block";
       }
     });
   }
@@ -581,10 +853,21 @@
     } catch (e) {
       showToast("APIへの接続に失敗しました");
     }
+
+    // 保存されているセッションが今も有効か確認する
+    const session = getSession();
+    if (session) {
+      try {
+        await apiGetAuthed("/auth/me");
+      } catch (e) {
+        clearSession();
+      }
+    }
+    renderAuthStatus();
     setTab("home");
   })();
 })();
 </script>
-
 </body>
 </html>
+
