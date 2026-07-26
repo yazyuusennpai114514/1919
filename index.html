@@ -672,7 +672,7 @@
       submitBtn.disabled = true; submitBtn.textContent = "登録中…";
       try {
         const result = await apiPost("/programs", { ...data, rewardMin: rMin, rewardMax: rMax });
-        renderTotpEnroll("program", result, avatarFile);
+        renderEmailVerify("program", data.contactEmail, result, avatarFile);
       } catch (err) {
         submitBtn.disabled = false; submitBtn.textContent = "プログラムを掲載する";
         showToast(err.message || "保存に失敗しました。もう一度お試しください");
@@ -723,10 +723,62 @@
       submitBtn.disabled = true; submitBtn.textContent = "登録中…";
       try {
         const result = await apiPost("/hunters", data);
-        renderTotpEnroll("hunter", result, avatarFile);
+        renderEmailVerify("hunter", data.email, result, avatarFile);
       } catch (err) {
         submitBtn.disabled = false; submitBtn.textContent = "登録する";
         showToast(err.message || "保存に失敗しました。もう一度お試しください");
+      }
+    });
+  }
+
+  // ---------- メールアドレス確認（登録直後、6桁コードをメールで受け取って入力） ----------
+  function renderEmailVerify(userType, email, registerResult, avatarFile) {
+    const typePath = userType === "hunter" ? "hunters" : "programs";
+    document.querySelectorAll(".tab").forEach((el) => el.classList.remove("active"));
+
+    main.innerHTML = `
+      <section class="panel narrow">
+        <h2>メールアドレスを確認してください</h2>
+        <p class="muted">
+          <strong>${esc(email)}</strong> 宛に確認コードを送信しました（届くまで数分かかる場合があります。迷惑メールフォルダもご確認ください）。
+        </p>
+        ${registerResult.emailSent === false ? `<div class="enroll-warning">メールの送信に失敗した可能性があります。下の「コードを再送信」をお試しください。</div>` : ""}
+
+        <form class="form" id="email-verify-form">
+          <label class="field">
+            <span class="field-label">確認コード（6桁）</span>
+            <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000">
+          </label>
+          <p class="form-error" id="email-verify-error" style="display:none"></p>
+          <button class="btn primary" type="submit">確認する</button>
+        </form>
+        <button class="btn ghost sm" id="resend-code-btn" type="button" style="margin-top:0.75rem">コードを再送信</button>
+      </section>
+    `;
+
+    const form = document.getElementById("email-verify-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = new FormData(form).get("code");
+      const errEl = document.getElementById("email-verify-error");
+      const submitBtn = form.querySelector("button[type=submit]");
+      submitBtn.disabled = true; submitBtn.textContent = "確認中…";
+      try {
+        await apiPost(`/${typePath}/${registerResult.id}/confirm-email`, { code });
+        renderTotpEnroll(userType, registerResult, avatarFile);
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = "確認する";
+        errEl.textContent = err.message || "コードが正しくありません";
+        errEl.style.display = "block";
+      }
+    });
+
+    document.getElementById("resend-code-btn").addEventListener("click", async () => {
+      try {
+        await apiPost(`/${typePath}/${registerResult.id}/resend-email-code`, {});
+        showToast("コードを再送信しました");
+      } catch (err) {
+        showToast(err.message || "再送信に失敗しました");
       }
     });
   }
@@ -1084,8 +1136,7 @@
               <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
               ${Number(r.reward_amount) >= 100000 ? `
                 <div class="enroll-warning" style="margin-bottom:1rem">
-                  10万円以上の送金では、９万円ごとに分割して入金してください。システムのエラーが発生してハンターに入金されないことがあります。
-                  送金先：https://www.paypal.com/paypalme/bughunteruk
+                  10万円以上の送金です。PayPalは1回10万円未満なら本人確認不要のため、複数回に分けて送金することをおすすめします。
                 </div>
               ` : ""}
             ` : ""}
