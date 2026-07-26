@@ -1031,6 +1031,8 @@
     const r = detail.report;
     const sev = sevMeta(r.severity);
     const commentList = comments.comments || [];
+    const isOwnerCompany = session.userType === "program" && session.id === detail.program.id;
+    const STATUS_OPTIONS = ["トリアージ", "返信待ち", "info", "解決済み", "スパム", "N/A", "閉鎖"];
 
     main.innerHTML = `
       <section class="panel">
@@ -1042,6 +1044,7 @@
         <p class="muted" style="margin:0.5rem 0 1.25rem">
           ${esc(detail.program.company_name)}宛${detail.hunter ? ` ／ 報告者: ${esc(detail.hunter.handle)}` : ""} ／ ステータス: ${esc(r.status)} ／ ${fmtDate(r.created_at)}
         </p>
+        ${!isOwnerCompany && r.reward_amount != null ? `<p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0 0 1.25rem">付与された報奨金: ¥${Number(r.reward_amount).toLocaleString()}</p>` : ""}
 
         <div class="detail-grid" style="grid-template-columns:1fr">
           <div><p class="section-label">詳細な説明</p><p style="white-space:pre-wrap">${esc(r.description)}</p></div>
@@ -1049,6 +1052,29 @@
         ${r.poc ? `
           <div class="detail-grid" style="grid-template-columns:1fr; margin-top:1rem">
             <div><p class="section-label">再現手順（PoC）</p><p style="white-space:pre-wrap">${esc(r.poc)}</p></div>
+          </div>
+        ` : ""}
+
+        ${isOwnerCompany ? `
+          <div class="report-form" style="margin-top:1.5rem">
+            <p class="section-label" style="margin-bottom:0.75rem">管理（企業のみ）</p>
+            <form class="form" id="status-form">
+              <div class="field-row">
+                <label class="field">
+                  <span class="field-label">ステータス</span>
+                  <select name="status">
+                    ${STATUS_OPTIONS.map((s) => `<option value="${esc(s)}"${s === r.status ? " selected" : ""}>${esc(s)}</option>`).join("")}
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">報奨金（円）</span>
+                  <input type="number" min="0" name="rewardAmount" value="${r.reward_amount != null ? r.reward_amount : ""}" placeholder="未設定">
+                </label>
+              </div>
+              <p class="form-error" id="status-error" style="display:none"></p>
+              <button class="btn primary sm" type="submit">更新する</button>
+            </form>
+            <button class="btn ghost sm" id="delete-report-btn" type="button" style="margin-top:0.75rem; color:var(--critical); border-color:var(--critical)">このレポートを削除する</button>
           </div>
         ` : ""}
 
@@ -1078,6 +1104,43 @@
     `;
 
     document.getElementById("report-back-btn").addEventListener("click", goBackFromReportDetail);
+
+    if (isOwnerCompany) {
+      const statusForm = document.getElementById("status-form");
+      statusForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(statusForm);
+        const status = fd.get("status");
+        const rewardRaw = fd.get("rewardAmount");
+        const rewardAmount = rewardRaw === "" ? null : Number(rewardRaw);
+        const errEl = document.getElementById("status-error");
+        const submitBtn = statusForm.querySelector("button[type=submit]");
+        submitBtn.disabled = true; submitBtn.textContent = "更新中…";
+        try {
+          await apiPatch(`/reports/${state.activeReportId}`, { status, rewardAmount });
+          showToast("更新しました");
+          renderReportDetail();
+        } catch (err) {
+          submitBtn.disabled = false; submitBtn.textContent = "更新する";
+          errEl.textContent = err.message || "更新に失敗しました";
+          errEl.style.display = "block";
+        }
+      });
+
+      document.getElementById("delete-report-btn").addEventListener("click", async () => {
+        if (!confirm("このレポートを削除します。元に戻せません。よろしいですか？")) return;
+        try {
+          await fetch(`${API_BASE}/reports/${state.activeReportId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${session.token}` },
+          });
+          showToast("レポートを削除しました");
+          goBackFromReportDetail();
+        } catch (err) {
+          showToast("削除に失敗しました");
+        }
+      });
+    }
 
     const form = document.getElementById("comment-form");
     form.addEventListener("submit", async (e) => {
