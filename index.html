@@ -1021,11 +1021,12 @@
     if (!session) { setTab("login"); return; }
 
     main.innerHTML = `<div class="loading">読み込み中…</div>`;
-    let detail, comments;
+    let detail, comments, platformInfo;
     try {
-      [detail, comments] = await Promise.all([
+      [detail, comments, platformInfo] = await Promise.all([
         apiGetAuthed(`/reports/${state.activeReportId}`),
         apiGetAuthed(`/reports/${state.activeReportId}/comments`),
+        apiGet(`/platform-info`).catch(() => ({ paypalLink: null, feePercent: 10 })),
       ]);
     } catch (e) {
       showToast("レポートの取得に失敗しました");
@@ -1049,7 +1050,11 @@
         <p class="muted" style="margin:0.5rem 0 1.25rem">
           ${esc(detail.program.company_name)}宛${detail.hunter ? ` ／ 報告者: ${esc(detail.hunter.handle)}` : ""} ／ ステータス: ${esc(r.status)} ／ ${fmtDate(r.created_at)}
         </p>
-        ${!isOwnerCompany && r.reward_amount != null ? `<p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0 0 1.25rem">付与された報奨金: ¥${Number(r.reward_amount).toLocaleString()}${r.reward_paid ? "（支払い済み）" : "（未払い）"}</p>` : ""}
+        ${!isOwnerCompany && r.reward_amount != null ? `
+          <p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0 0 1.25rem">
+            報奨金: ¥${Number(r.reward_amount).toLocaleString()}（プラットフォーム手数料${platformInfo.feePercent}%差引後、¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()} をお支払いします）${r.reward_paid ? "（支払い済み）" : "（未払い）"}
+          </p>
+        ` : ""}
 
         <div class="detail-grid" style="grid-template-columns:1fr">
           <div><p class="section-label">詳細な説明</p><p style="white-space:pre-wrap">${esc(r.description)}</p></div>
@@ -1063,15 +1068,25 @@
         ${isOwnerCompany ? `
           <div class="report-form" style="margin-top:1.5rem">
             <p class="section-label" style="margin-bottom:0.75rem">管理（企業のみ）</p>
-            ${detail.hunter && detail.hunter.paypal_link ? `
-              <p class="muted" style="margin-bottom:0.75rem">
-                PayPal受け取り先: <span style="font-family:'IBM Plex Mono',monospace; color:var(--text)">${esc(detail.hunter.paypal_link)}</span>
-              </p>
-            ` : `<p class="muted" style="margin-bottom:0.75rem">ハンターがPayPal受け取り先を登録していません。</p>`}
-            ${r.reward_amount != null && Number(r.reward_amount) >= 100000 ? `
-              <div class="enroll-warning" style="margin-bottom:1rem">
-                報奨金が10万円以上です。PayPalは1回10万円未満なら本人確認不要で送受金できるため、複数回に分けて送金することをおすすめします。
+            ${r.reward_amount != null ? `
+              <div class="detail-grid" style="grid-template-columns:1fr; margin-bottom:1rem">
+                <div>
+                  <p class="section-label">報奨金のお支払いについて</p>
+                  <p style="line-height:1.8">
+                    報奨金は<strong>プラットフォーム経由</strong>でハンターにお支払いします。以下の送金先に、報奨金の全額をお送りください（手数料${platformInfo.feePercent}%を差し引いた金額がハンターに届きます）。<br>
+                    送金先(PayPal): <span style="font-family:'IBM Plex Mono',monospace">${esc(platformInfo.paypalLink || "未設定")}</span><br>
+                    送金額（全額）: ¥${Number(r.reward_amount).toLocaleString()}<br>
+                    プラットフォーム手数料（${platformInfo.feePercent}%）: ¥${Math.round(Number(r.reward_amount) * (platformInfo.feePercent / 100)).toLocaleString()}<br>
+                    ハンターへの支払い額: ¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()}
+                  </p>
+                </div>
               </div>
+              <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
+              ${Number(r.reward_amount) >= 100000 ? `
+                <div class="enroll-warning" style="margin-bottom:1rem">
+                  10万円以上の送金です。PayPalは1回10万円未満なら本人確認不要のため、複数回に分けて送金することをおすすめします。
+                </div>
+              ` : ""}
             ` : ""}
             <form class="form" id="status-form">
               <div class="field-row">
@@ -1086,15 +1101,6 @@
                   <input type="number" min="0" name="rewardAmount" value="${r.reward_amount != null ? r.reward_amount : ""}" placeholder="未設定">
                 </label>
               </div>
-              <label class="field">
-                <span class="field-label">分割送金メモ</span>
-                <span class="field-hint">例: 5万円ずつ2回に分けて送金予定</span>
-                <textarea name="paymentNote" rows="2" placeholder="送金の記録用メモ">${esc(r.payment_note || "")}</textarea>
-              </label>
-              <label class="field" style="flex-direction:row; align-items:center; gap:0.5rem">
-                <input type="checkbox" name="rewardPaid" ${r.reward_paid ? "checked" : ""} style="width:auto">
-                <span class="field-label" style="margin:0">支払い済みにする</span>
-              </label>
               <p class="form-error" id="status-error" style="display:none"></p>
               <button class="btn primary sm" type="submit">更新する</button>
             </form>
@@ -1137,13 +1143,11 @@
         const status = fd.get("status");
         const rewardRaw = fd.get("rewardAmount");
         const rewardAmount = rewardRaw === "" ? null : Number(rewardRaw);
-        const paymentNote = fd.get("paymentNote");
-        const rewardPaid = statusForm.querySelector("[name=rewardPaid]").checked;
         const errEl = document.getElementById("status-error");
         const submitBtn = statusForm.querySelector("button[type=submit]");
         submitBtn.disabled = true; submitBtn.textContent = "更新中…";
         try {
-          await apiPatch(`/reports/${state.activeReportId}`, { status, rewardAmount, rewardPaid, paymentNote });
+          await apiPatch(`/reports/${state.activeReportId}`, { status, rewardAmount });
           showToast("更新しました");
           renderReportDetail();
         } catch (err) {
