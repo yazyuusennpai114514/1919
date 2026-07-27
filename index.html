@@ -953,6 +953,7 @@
       <section class="panel narrow">
         <h2>マイページ</h2>
         <p class="muted">${isHunter ? "ハンター" : "企業"}アカウントの情報を編集できます。</p>
+        ${isHunter ? `<p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0.5rem 0 0">ポイント: ${Number(me.points || 0).toLocaleString()}</p>` : ""}
         ${isHunter ? `<button class="btn ghost sm" id="go-myreports" type="button" style="margin-top:0.5rem">提出したレポートを見る →</button>` : ""}
         ${!isHunter ? renderProgramTypeStatus(me) : ""}
 
@@ -1121,7 +1122,7 @@
     const commentList = comments.comments || [];
     const isOwnerCompany = session.userType === "program" && session.id === detail.program.id;
     const isVdp = detail.program.program_type === "vdp";
-    const STATUS_OPTIONS = ["トリアージ", "返信待ち", "info", "解決済み", "スパム", "N/A", "閉鎖"];
+    const STATUS_OPTIONS = ["トリアージ", "返信待ち", "info", "解決済み", "スパム", "N/A", "重複", "閉鎖"];
 
     main.innerHTML = `
       <section class="panel">
@@ -1167,7 +1168,7 @@
               <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
               ${Number(r.reward_amount) >= 100000 ? `
                 <div class="enroll-warning" style="margin-bottom:1rem">
-                 10万円以上の送金ではシステムのエラーが出て入金されないことがあります。入金する際は１０万円ごとに分割してください。
+                  10万円以上の送金ではシステムのエラーが出て入金されないことがあります。入金する際は１０万円ごとに分割してください。
                 </div>
               ` : ""}
             ` : ""}
