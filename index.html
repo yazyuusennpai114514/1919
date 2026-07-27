@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>bughunter</title>
 </head>
-<body><div class="app" id="app">
+<div class="app" id="app">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -625,7 +625,7 @@
             <span class="field-label">プログラム種別 *</span>
             <div class="login-type-toggle">
               <button type="button" class="btn ghost sm program-type-btn active-type" data-type="bbp">バグバウンティ（賞金あり）</button>
-              <button type="button" class="btn ghost sm program-type-btn" data-type="vdp">VDP（月額500円・賞金なし）</button>
+              <button type="button" class="btn ghost sm program-type-btn" data-type="vdp">VDP（賞金なし・報告受付のみ）</button>
             </div>
             <input type="hidden" name="programType" value="bbp">
             <span class="field-hint" id="program-type-hint">月額費用はかかりません。報奨金が支払われた際にのみ手数料10%が発生します。</span>
@@ -665,7 +665,7 @@
         const isVdp = btn.dataset.type === "vdp";
         document.getElementById("reward-range-fields").style.display = isVdp ? "none" : "grid";
         document.getElementById("program-type-hint").textContent = isVdp
-          ? "月額500円です。支払いが2ヶ月無いと自動的に一時停止し、公開一覧から非表示になります。復活には3000円かかります。"
+          ? "無料です。ただし報奨金は設定できません。脆弱性の報告受付・やり取りのみのプログラムになります。"
           : "月額費用はかかりません。報奨金が支払われた際にのみ手数料10%が発生します。";
       });
     });
@@ -928,16 +928,7 @@
     if (me.program_type !== "vdp") {
       return `<p class="muted" style="margin-top:0.5rem">プログラム種別: バグバウンティ（賞金あり）</p>`;
     }
-    const lastPaid = me.last_paid_at ? fmtDate(me.last_paid_at) : "未払い";
-    if (me.is_suspended) {
-      return `
-        <div class="enroll-warning" style="margin-top:0.75rem">
-          VDPプログラムは現在<strong>一時停止中</strong>です（最終支払い: ${lastPaid}）。<br>
-          プログラム一覧に表示されず、新規レポートも受け付けられません。運営者に3,000円をお支払いいただくと復活します。
-        </div>
-      `;
-    }
-    return `<p class="muted" style="margin-top:0.5rem">プログラム種別: VDP（月額500円） ／ 最終支払い: ${lastPaid}</p>`;
+    return `<p class="muted" style="margin-top:0.5rem">プログラム種別: VDP（賞金なし・報告受付のみ）</p>`;
   }
 
   async function renderMyProfile() {
@@ -1176,7 +1167,7 @@
               <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
               ${Number(r.reward_amount) >= 100000 ? `
                 <div class="enroll-warning" style="margin-bottom:1rem">
-                  10万円以上の送金ではシステムのエラーが出て入金されないことがあります。入金する際は１０万円ごとに分割してください。
+                 10万円以上の送金ではシステムのエラーが出て入金されないことがあります。入金する際は１０万円ごとに分割してください。
                 </div>
               ` : ""}
             ` : ""}
