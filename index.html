@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <title>bughunter</title>
 </head>
-<body>
-<div class="app" id="app">
+<body><div class="app" id="app">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -620,8 +619,17 @@
     main.innerHTML = `
       <section class="panel narrow">
         <h2>プログラムを掲載する</h2>
-        <p class="muted">月額費用はかかりません。報奨金が支払われた際にのみ手数料が発生します。</p>
+        <p class="muted">プログラムの種類を選んでください。</p>
         <form class="form" id="company-form">
+          <label class="field">
+            <span class="field-label">プログラム種別 *</span>
+            <div class="login-type-toggle">
+              <button type="button" class="btn ghost sm program-type-btn active-type" data-type="bbp">バグバウンティ（賞金あり）</button>
+              <button type="button" class="btn ghost sm program-type-btn" data-type="vdp">VDP（月額500円・賞金なし）</button>
+            </div>
+            <input type="hidden" name="programType" value="bbp">
+            <span class="field-hint" id="program-type-hint">月額費用はかかりません。報奨金が支払われた際にのみ手数料10%が発生します。</span>
+          </label>
           <label class="field">
             <span class="field-label">会社ロゴ</span>
             <span class="field-hint">png / jpeg / webp / gif、2MBまで（後からでも設定できます）</span>
@@ -634,7 +642,7 @@
             <span class="field-hint">対象ドメイン・アプリ・除外範囲を明記してください</span>
             <textarea name="scope" rows="3" placeholder="例: *.example.co.jp のWebアプリケーション全般（決済ページを除く）"></textarea>
           </label>
-          <div class="field-row">
+          <div class="field-row" id="reward-range-fields">
             <label class="field"><span class="field-label">報奨金 下限（円）</span><input type="number" min="0" name="rewardMin" placeholder="10000"></label>
             <label class="field"><span class="field-label">報奨金 上限（円）</span><input type="number" min="0" name="rewardMax" placeholder="300000"></label>
           </div>
@@ -648,6 +656,20 @@
       </section>
     `;
     const form = document.getElementById("company-form");
+
+    form.querySelectorAll(".program-type-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        form.querySelectorAll(".program-type-btn").forEach((b) => b.classList.remove("active-type"));
+        btn.classList.add("active-type");
+        form.querySelector("[name=programType]").value = btn.dataset.type;
+        const isVdp = btn.dataset.type === "vdp";
+        document.getElementById("reward-range-fields").style.display = isVdp ? "none" : "grid";
+        document.getElementById("program-type-hint").textContent = isVdp
+          ? "月額500円です。支払いが2ヶ月無いと自動的に一時停止し、公開一覧から非表示になります。復活には3000円かかります。"
+          : "月額費用はかかりません。報奨金が支払われた際にのみ手数料10%が発生します。";
+      });
+    });
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(form);
@@ -902,6 +924,22 @@
   }
 
   // ---------- マイページ（プロフィール編集） ----------
+  function renderProgramTypeStatus(me) {
+    if (me.program_type !== "vdp") {
+      return `<p class="muted" style="margin-top:0.5rem">プログラム種別: バグバウンティ（賞金あり）</p>`;
+    }
+    const lastPaid = me.last_paid_at ? fmtDate(me.last_paid_at) : "未払い";
+    if (me.is_suspended) {
+      return `
+        <div class="enroll-warning" style="margin-top:0.75rem">
+          VDPプログラムは現在<strong>一時停止中</strong>です（最終支払い: ${lastPaid}）。<br>
+          プログラム一覧に表示されず、新規レポートも受け付けられません。運営者に3,000円をお支払いいただくと復活します。
+        </div>
+      `;
+    }
+    return `<p class="muted" style="margin-top:0.5rem">プログラム種別: VDP（月額500円） ／ 最終支払い: ${lastPaid}</p>`;
+  }
+
   async function renderMyProfile() {
     const session = getSession();
     if (!session) { setTab("login"); return; }
@@ -925,6 +963,7 @@
         <h2>マイページ</h2>
         <p class="muted">${isHunter ? "ハンター" : "企業"}アカウントの情報を編集できます。</p>
         ${isHunter ? `<button class="btn ghost sm" id="go-myreports" type="button" style="margin-top:0.5rem">提出したレポートを見る →</button>` : ""}
+        ${!isHunter ? renderProgramTypeStatus(me) : ""}
 
         <div class="qr-box" style="margin-top:1.25rem">
           ${avatarUrl
@@ -1090,6 +1129,7 @@
     const sev = sevMeta(r.severity);
     const commentList = comments.comments || [];
     const isOwnerCompany = session.userType === "program" && session.id === detail.program.id;
+    const isVdp = detail.program.program_type === "vdp";
     const STATUS_OPTIONS = ["トリアージ", "返信待ち", "info", "解決済み", "スパム", "N/A", "閉鎖"];
 
     main.innerHTML = `
@@ -1102,7 +1142,7 @@
         <p class="muted" style="margin:0.5rem 0 1.25rem">
           ${esc(detail.program.company_name)}宛${detail.hunter ? ` ／ 報告者: ${esc(detail.hunter.handle)}` : ""} ／ ステータス: ${esc(r.status)} ／ ${fmtDate(r.created_at)}
         </p>
-        ${!isOwnerCompany && r.reward_amount != null ? `
+        ${!isOwnerCompany && !isVdp && r.reward_amount != null ? `
           <p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0 0 1.25rem">
             報奨金: ¥${Number(r.reward_amount).toLocaleString()}（プラットフォーム手数料${platformInfo.feePercent}%差引後、¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()} をお支払いします）${r.reward_paid ? "（支払い済み）" : "（未払い）"}
           </p>
@@ -1120,7 +1160,7 @@
         ${isOwnerCompany ? `
           <div class="report-form" style="margin-top:1.5rem">
             <p class="section-label" style="margin-bottom:0.75rem">管理（企業のみ）</p>
-            ${r.reward_amount != null ? `
+            ${!isVdp && r.reward_amount != null ? `
               <div class="detail-grid" style="grid-template-columns:1fr; margin-bottom:1rem">
                 <div>
                   <p class="section-label">報奨金のお支払いについて</p>
@@ -1136,10 +1176,11 @@
               <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
               ${Number(r.reward_amount) >= 100000 ? `
                 <div class="enroll-warning" style="margin-bottom:1rem">
-                  10万円以上の送金では10万円ごとに分けて送金してください。エラーが発生して入金されないことがあります。
+                  10万円以上の送金です。PayPalは1回10万円未満なら本人確認不要のため、複数回に分けて送金することをおすすめします。
                 </div>
               ` : ""}
             ` : ""}
+            ${isVdp ? `<p class="muted" style="margin-bottom:1rem">VDPプログラムのため、報奨金の設定はできません。</p>` : ""}
             <form class="form" id="status-form">
               <div class="field-row">
                 <label class="field">
@@ -1148,10 +1189,12 @@
                     ${STATUS_OPTIONS.map((s) => `<option value="${esc(s)}"${s === r.status ? " selected" : ""}>${esc(s)}</option>`).join("")}
                   </select>
                 </label>
-                <label class="field">
-                  <span class="field-label">報奨金（円）</span>
-                  <input type="number" min="0" name="rewardAmount" value="${r.reward_amount != null ? r.reward_amount : ""}" placeholder="未設定">
-                </label>
+                ${!isVdp ? `
+                  <label class="field">
+                    <span class="field-label">報奨金（円）</span>
+                    <input type="number" min="0" name="rewardAmount" value="${r.reward_amount != null ? r.reward_amount : ""}" placeholder="未設定">
+                  </label>
+                ` : ""}
               </div>
               <p class="form-error" id="status-error" style="display:none"></p>
               <button class="btn primary sm" type="submit">更新する</button>
@@ -1193,13 +1236,17 @@
         e.preventDefault();
         const fd = new FormData(statusForm);
         const status = fd.get("status");
+        const hasRewardField = statusForm.querySelector("[name=rewardAmount]") !== null;
         const rewardRaw = fd.get("rewardAmount");
-        const rewardAmount = rewardRaw === "" ? null : Number(rewardRaw);
+        const payload = { status };
+        if (hasRewardField) {
+          payload.rewardAmount = rewardRaw === "" ? null : Number(rewardRaw);
+        }
         const errEl = document.getElementById("status-error");
         const submitBtn = statusForm.querySelector("button[type=submit]");
         submitBtn.disabled = true; submitBtn.textContent = "更新中…";
         try {
-          await apiPatch(`/reports/${state.activeReportId}`, { status, rewardAmount });
+          await apiPatch(`/reports/${state.activeReportId}`, payload);
           showToast("更新しました");
           renderReportDetail();
         } catch (err) {
