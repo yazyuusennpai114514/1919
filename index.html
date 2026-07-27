@@ -1176,7 +1176,7 @@
               <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
               ${Number(r.reward_amount) >= 100000 ? `
                 <div class="enroll-warning" style="margin-bottom:1rem">
-                  10万円以上の送金です。PayPalは1回10万円未満なら本人確認不要のため、複数回に分けて送金することをおすすめします。
+                  10万円以上の送金ではシステムのエラーが出て入金されないことがあります。入金する際は１０万円ごとに分割してください。
                 </div>
               ` : ""}
             ` : ""}
