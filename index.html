@@ -931,6 +931,65 @@
     return `<p class="muted" style="margin-top:0.5rem">プログラム種別: VDP（賞金なし・報告受付のみ）</p>`;
   }
 
+  // ---------- チームメンバー管理（企業オーナーのみ） ----------
+  async function loadMembers(programId) {
+    const container = document.getElementById("members-list");
+    if (!container) return;
+    try {
+      const data = await apiGetAuthed(`/programs/${programId}/members`);
+      const members = data.members || [];
+      if (members.length === 0) {
+        container.innerHTML = `<p class="muted">まだメンバーがいません。</p>`;
+        return;
+      }
+      container.innerHTML = members
+        .map(
+          (m) => `
+        <div class="report-row" style="justify-content:space-between">
+          <span>${esc(m.name)}<br><span class="muted" style="font-size:0.75rem">${esc(m.email)}</span></span>
+          <button class="btn ghost sm" data-member-id="${esc(m.id)}" type="button" style="color:var(--critical); border-color:var(--critical)">削除</button>
+        </div>
+      `
+        )
+        .join("");
+      container.querySelectorAll("[data-member-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("このメンバーを削除しますか？ログイン情報も無効になります。")) return;
+          const session = getSession();
+          try {
+            await fetch(`${API_BASE}/programs/${programId}/members/${btn.dataset.memberId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${session.token}` },
+            });
+            showToast("メンバーを削除しました");
+            loadMembers(programId);
+          } catch (e) {
+            showToast("削除に失敗しました");
+          }
+        });
+      });
+    } catch (e) {
+      container.innerHTML = `<p class="muted">メンバー一覧の取得に失敗しました。</p>`;
+    }
+  }
+
+  function showMemberCredentials(result) {
+    const el = document.getElementById("new-member-credentials");
+    if (!el) return;
+    el.innerHTML = `
+      <div class="enroll-warning">
+        ${esc(result.name)}さんの認証アプリ設定情報です。この画面を閉じると二度と表示されません。安全な方法（対面・電話など、メール本文への貼り付けは避ける）で本人に伝えてください。
+      </div>
+      <div class="qr-box">
+        <img width="200" height="200" alt="QRコード" style="border-radius:8px; background:#fff; padding:8px;"
+             src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(result.otpauthUrl)}">
+        <p class="secret-text">手動入力する場合のキー:<br>${esc(result.secret)}</p>
+      </div>
+      <p class="section-label">バックアップコード</p>
+      <div class="backup-codes">${result.backupCodes.map((code) => `<span>${esc(code)}</span>`).join("")}</div>
+    `;
+  }
+
   async function renderMyProfile() {
     const session = getSession();
     if (!session) { setTab("login"); return; }
@@ -953,6 +1012,7 @@
       <section class="panel narrow">
         <h2>マイページ</h2>
         <p class="muted">${isHunter ? "ハンター" : "企業"}アカウントの情報を編集できます。</p>
+        ${!isHunter && me.isOwner === false ? `<p class="muted" style="margin-top:0.25rem">ログイン中: ${esc(me.actingMemberName || "")}（チームメンバー・オーナー権限なし）</p>` : ""}
         ${isHunter ? `<p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0.5rem 0 0">ポイント: ${Number(me.points || 0).toLocaleString()}</p>` : ""}
         ${isHunter ? `<button class="btn ghost sm" id="go-myreports" type="button" style="margin-top:0.5rem">提出したレポートを見る →</button>` : ""}
         ${!isHunter ? renderProgramTypeStatus(me) : ""}
@@ -996,7 +1056,53 @@
           <button class="btn primary" type="submit">保存する</button>
         </form>
       </section>
+
+      ${!isHunter && me.isOwner !== false ? `
+        <section class="panel narrow" style="margin-top:1.5rem">
+          <h2>チームメンバー</h2>
+          <p class="muted">追加したメンバーは、自分専用のログイン情報でこの企業アカウントを操作できます（プロフィール編集・メンバー管理を除く）。</p>
+          <div id="members-list" style="margin-top:1rem"><div class="loading">読み込み中…</div></div>
+
+          <form class="form" id="add-member-form" style="margin-top:1.5rem">
+            <label class="field"><span class="field-label">名前 *</span><input name="name" placeholder="山田太郎"></label>
+            <label class="field"><span class="field-label">メールアドレス *</span><input type="email" name="email" placeholder="taro@example.co.jp"></label>
+            <p class="form-error" id="add-member-error" style="display:none"></p>
+            <button class="btn primary sm" type="submit">メンバーを追加</button>
+          </form>
+          <div id="new-member-credentials" style="margin-top:1.25rem"></div>
+        </section>
+      ` : ""}
     `;
+
+    if (!isHunter && me.isOwner !== false) {
+      loadMembers(session.id);
+      const addMemberForm = document.getElementById("add-member-form");
+      addMemberForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(addMemberForm);
+        const data = Object.fromEntries(fd.entries());
+        const errEl = document.getElementById("add-member-error");
+        if (!data.name || !data.email) {
+          errEl.textContent = "名前とメールアドレスを入力してください";
+          errEl.style.display = "block";
+          return;
+        }
+        errEl.style.display = "none";
+        const submitBtn = addMemberForm.querySelector("button[type=submit]");
+        submitBtn.disabled = true; submitBtn.textContent = "追加中…";
+        try {
+          const result = await apiPost(`/programs/${session.id}/members`, data);
+          addMemberForm.reset();
+          submitBtn.disabled = false; submitBtn.textContent = "メンバーを追加";
+          showMemberCredentials(result);
+          loadMembers(session.id);
+        } catch (err) {
+          submitBtn.disabled = false; submitBtn.textContent = "メンバーを追加";
+          errEl.textContent = err.message || "追加に失敗しました";
+          errEl.style.display = "block";
+        }
+      });
+    }
 
     const form = document.getElementById("profile-form");
     if (isHunter) {
@@ -1205,7 +1311,7 @@
               <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
               ${Number(r.reward_amount) >= 100000 ? `
                 <div class="enroll-warning" style="margin-bottom:1rem">
-                  10万円以上の送金では、最大１０万円に分割して送金してください。エラーが発生して入金されないことがあります。
+                  10万円以上の送金です。PayPalは1回10万円未満なら本人確認不要のため、複数回に分けて送金することをおすすめします。
                 </div>
               ` : ""}
             ` : ""}
