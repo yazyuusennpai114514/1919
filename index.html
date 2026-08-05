@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>bughunter</title>
-</head>
-<div class="app" id="app">
+</head><div class="app" id="app">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -182,7 +181,7 @@
     { key: "low", ja: "低", en: "Low", color: "#5B8DEF" },
   ];
 
-  const state = { tab: "home", programs: [], hunters: [], reportCount: 0, activeProgramId: null, activeReportId: null, reportOrigin: null };
+  const state = { tab: "home", programs: [], hunters: [], reportCount: 0, activeProgramId: null, activeReportId: null, reportOrigin: null, showHiddenReports: false };
 
   const main = document.getElementById("main");
   const toastEl = document.getElementById("toast");
@@ -335,6 +334,7 @@
       poc: r.poc,
       contactEmail: r.contact_email,
       status: r.status,
+      hiddenByCompany: !!r.hidden_by_company,
       createdAt: r.created_at,
     };
   }
@@ -479,7 +479,7 @@
     let reports = [];
     if (isOwner) {
       try {
-        const data = await apiGetAuthed(`/programs/${program.id}/reports`);
+        const data = await apiGetAuthed(`/programs/${program.id}/reports${state.showHiddenReports ? "?includeHidden=1" : ""}`);
         reports = (data.reports || []).map(normalizeReport);
       } catch (e) {
         showToast("レポートの取得に失敗しました");
@@ -508,15 +508,16 @@
           <h3>${isOwner ? `提出済みレポート（${reports.length}）` : "脆弱性を見つけましたか？"}</h3>
           <button class="btn primary sm" id="toggle-report-form">脆弱性を報告する</button>
         </div>
+        ${isOwner ? `<button class="btn ghost sm" id="toggle-hidden-reports" type="button" style="margin-bottom:1rem">${state.showHiddenReports ? "非表示のレポートを隠す" : "非表示のレポートも表示する"}</button>` : ""}
         <div id="report-form-slot"></div>
         ${isOwner
           ? (reports.length === 0
               ? `<div class="empty-state"><p>まだレポートがありません。</p></div>`
               : `<ul class="report-list">${reports.map((r) => {
                   const sev = sevMeta(r.severity);
-                  return `<li class="report-row report-row-clickable" data-report-id="${r.id}">
+                  return `<li class="report-row report-row-clickable" data-report-id="${r.id}" style="${r.hiddenByCompany ? "opacity:0.5" : ""}">
                     <span class="severity-chip" style="--chip:${sev.color}"><i></i> ${sev.ja}</span>
-                    <span class="report-title">${esc(r.title)}</span>
+                    <span class="report-title">${esc(r.title)}${r.hiddenByCompany ? ` <span class="muted" style="font-size:0.72rem">（非表示）</span>` : ""}</span>
                     <span class="report-status">${esc(r.status)}</span>
                     <span class="card-date">${fmtDate(r.createdAt)}</span>
                   </li>`;
@@ -525,6 +526,13 @@
       </section>
     `;
     document.getElementById("back-btn").addEventListener("click", () => { state.activeProgramId = null; render(); });
+    const toggleHiddenBtn = document.getElementById("toggle-hidden-reports");
+    if (toggleHiddenBtn) {
+      toggleHiddenBtn.addEventListener("click", () => {
+        state.showHiddenReports = !state.showHiddenReports;
+        renderProgramDetail();
+      });
+    }
     main.querySelectorAll("[data-report-id]").forEach((el) => {
       el.addEventListener("click", () => {
         state.activeReportId = el.dataset.reportId;
@@ -947,21 +955,21 @@
           (m) => `
         <div class="report-row" style="justify-content:space-between">
           <span>${esc(m.name)}<br><span class="muted" style="font-size:0.75rem">${esc(m.email)}</span></span>
-          <button class="btn ghost sm" data-member-id="${esc(m.id)}" type="button" style="color:var(--critical); border-color:var(--critical)">削除</button>
+          <button class="btn ghost sm" data-member-id="${esc(m.id)}" type="button" style="color:var(--critical); border-color:var(--critical)">非表示にする</button>
         </div>
       `
         )
         .join("");
       container.querySelectorAll("[data-member-id]").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("このメンバーを削除しますか？ログイン情報も無効になります。")) return;
+          if (!confirm("このメンバーを一覧から非表示にし、ログインもできなくします。データは残ります。よろしいですか？")) return;
           const session = getSession();
           try {
             await fetch(`${API_BASE}/programs/${programId}/members/${btn.dataset.memberId}`, {
               method: "DELETE",
               headers: { Authorization: `Bearer ${session.token}` },
             });
-            showToast("メンバーを削除しました");
+            showToast("メンバーを非表示にしました");
             loadMembers(programId);
           } catch (e) {
             showToast("削除に失敗しました");
@@ -1311,7 +1319,7 @@
               <p class="muted" style="margin-bottom:1rem">支払い状況: ${r.reward_paid ? "支払い済み" : "未払い"}</p>
               ${Number(r.reward_amount) >= 100000 ? `
                 <div class="enroll-warning" style="margin-bottom:1rem">
-                  10万円以上の送金では１０万円ごとに分割して送金してください。入金されないことがあります。
+                  10万円以上の送金では、10万円ごとに分割して送金してください。入金されないことがあります。
                 </div>
               ` : ""}
             ` : ""}
@@ -1334,7 +1342,10 @@
               <p class="form-error" id="status-error" style="display:none"></p>
               <button class="btn primary sm" type="submit">更新する</button>
             </form>
-            <button class="btn ghost sm" id="delete-report-btn" type="button" style="margin-top:0.75rem; color:var(--critical); border-color:var(--critical)">このレポートを削除する</button>
+            <div style="display:flex; gap:0.75rem; margin-top:0.75rem; flex-wrap:wrap">
+              <button class="btn ghost sm" id="toggle-hide-report-btn" type="button">${r.hidden_by_company ? "表示に戻す" : "非表示にする"}</button>
+              <button class="btn ghost sm" id="delete-report-btn" type="button" style="color:var(--critical); border-color:var(--critical)">このレポートを削除する</button>
+            </div>
           </div>
         ` : ""}
 
@@ -1388,6 +1399,16 @@
           submitBtn.disabled = false; submitBtn.textContent = "更新する";
           errEl.textContent = err.message || "更新に失敗しました";
           errEl.style.display = "block";
+        }
+      });
+
+      document.getElementById("toggle-hide-report-btn").addEventListener("click", async () => {
+        try {
+          await apiPatch(`/reports/${state.activeReportId}`, { hiddenByCompany: !r.hidden_by_company });
+          showToast(r.hidden_by_company ? "表示に戻しました" : "非表示にしました");
+          renderReportDetail();
+        } catch (err) {
+          showToast(err.message || "更新に失敗しました");
         }
       });
 
