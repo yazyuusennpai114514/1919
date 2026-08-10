@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>bughunter</title>
-</head><div class="app" id="app">
+</head>
+  <div class="app" id="app">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -658,6 +659,10 @@
             <span class="field-label">プログラムの説明 *</span>
             <textarea name="description" rows="4" placeholder="プログラムの目的、審査基準、セーフハーバーの範囲など"></textarea>
           </label>
+          <label class="field" style="flex-direction:row; align-items:center; gap:0.5rem">
+            <input type="checkbox" name="agreedToTerms" style="width:auto">
+            <span class="field-label" style="margin:0"><a href="terms.html" target="_blank" style="color:var(--accent)">利用規約</a>と<a href="privacy.html" target="_blank" style="color:var(--accent)">プライバシーポリシー</a>に同意する</span>
+          </label>
           <p class="form-error" id="company-error" style="display:none"></p>
           <button class="btn primary" type="submit">プログラムを掲載する</button>
         </form>
@@ -687,6 +692,11 @@
       const errEl = document.getElementById("company-error");
       if (!data.companyName || !data.contactEmail || !data.scope || !data.description) {
         errEl.textContent = "すべての必須項目を入力してください";
+        errEl.style.display = "block";
+        return;
+      }
+      if (!data.agreedToTerms) {
+        errEl.textContent = "利用規約とプライバシーポリシーへの同意が必要です";
         errEl.style.display = "block";
         return;
       }
@@ -730,6 +740,10 @@
             <input name="skills" placeholder="例: Webアプリ診断、API、認証まわり">
           </label>
           <label class="field"><span class="field-label">実績・ポートフォリオURL</span><input name="portfolio" placeholder="HackerOneプロフィール、GitHubなど"></label>
+          <label class="field" style="flex-direction:row; align-items:center; gap:0.5rem">
+            <input type="checkbox" name="agreedToTerms" style="width:auto">
+            <span class="field-label" style="margin:0"><a href="terms.html" target="_blank" style="color:var(--accent)">利用規約</a>と<a href="privacy.html" target="_blank" style="color:var(--accent)">プライバシーポリシー</a>に同意する</span>
+          </label>
           <p class="form-error" id="hunter-error" style="display:none"></p>
           <button class="btn primary" type="submit">登録する</button>
         </form>
@@ -745,6 +759,11 @@
       const errEl = document.getElementById("hunter-error");
       if (!data.handle || !data.email) {
         errEl.textContent = "ハンドルネームとメールアドレスは必須です";
+        errEl.style.display = "block";
+        return;
+      }
+      if (!data.agreedToTerms) {
+        errEl.textContent = "利用規約とプライバシーポリシーへの同意が必要です";
         errEl.style.display = "block";
         return;
       }
