@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>bughunter</title>
 </head>
-  <div class="app" id="app">
+<div class="app" id="app">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
@@ -173,7 +173,7 @@
 <script>
 (function () {
   // ここを自分のWorkers URLに合わせて変更してください
-  const API_BASE = "https://bbp.hosimatisutazio.workers.dev";
+  const API_BASE = "https://api.bughunter.uk";
 
   const SEVERITIES = [
     { key: "critical", ja: "緊急", en: "Critical", color: "#E5484D" },
@@ -398,7 +398,7 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">JAPAN-FOCUSED BUG BOUNTY PLATFORM</p>
-          <h1>日本企業向けの<br>第３者によるセキュリティイ監査プラットフォーム</h1>
+          <h1>脆弱性は、<br>見つけた人に還元する。</h1>
           <p class="lead">日本企業向けの、月額固定費ゼロで始められるバグバウンティ運用サイトです。企業はプログラムを掲載し、ハンターは登録して脆弱性を報告します。</p>
           <div class="hero-actions">
             <button class="btn primary" id="cta-company">企業として掲載する</button>
@@ -503,7 +503,6 @@
         <div class="detail-grid">
           <div><p class="section-label">対象スコープ</p><p>${esc(program.scope)}</p></div>
           <div><p class="section-label">報奨金レンジ</p><p>¥${Number(program.rewardMin).toLocaleString()} 〜 ¥${Number(program.rewardMax).toLocaleString()}</p></div>
-          <div><p class="section-label">連絡先</p><p>${esc(program.contactEmail)}</p></div>
         </div>
         <div class="panel-head" style="margin-top:2rem">
           <h3>${isOwner ? `提出済みレポート（${reports.length}）` : "脆弱性を見つけましたか？"}</h3>
