@@ -398,7 +398,7 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">JAPAN-FOCUSED BUG BOUNTY PLATFORM</p>
-          <h1>日本人向けの、<br>バグバウンティイプラットフォーム。</h1>
+          <h1>脆弱性は、<br>見つけた人に還元する。</h1>
           <p class="lead">日本企業向けの、月額固定費ゼロで始められるバグバウンティ運用サイトです。企業はプログラムを掲載し、ハンターは登録して脆弱性を報告します。</p>
           <div class="hero-actions">
             <button class="btn primary" id="cta-company">企業として掲載する</button>
@@ -957,6 +957,26 @@
     return `<p class="muted" style="margin-top:0.5rem">プログラム種別: VDP（賞金なし・報告受付のみ）</p>`;
   }
 
+  function renderVerificationStatus(me) {
+    const status = me.verification_status || "none";
+    if (status === "verified") {
+      return `<p class="muted" style="margin-top:0.5rem; color:#5B8DEF">✓ 本人確認済み</p>`;
+    }
+    if (status === "pending") {
+      return `<p class="muted" style="margin-top:0.5rem">本人確認: 審査中です</p>`;
+    }
+    if (status === "rejected") {
+      return `
+        <p class="muted" style="margin-top:0.5rem; color:var(--critical)">本人確認が承認されませんでした</p>
+        ${me.canStartVerification ? `<button class="btn ghost sm" id="start-verification-btn" type="button" style="margin-top:0.35rem">もう一度本人確認をリクエストする</button>` : ""}
+      `;
+    }
+    if (me.canStartVerification) {
+      return `<button class="btn ghost sm" id="start-verification-btn" type="button" style="margin-top:0.5rem">本人確認をリクエストする</button>`;
+    }
+    return `<p class="muted" style="margin-top:0.5rem">本人確認は、解決済みのレポートが1件以上あるとリクエストできます。</p>`;
+  }
+
   // ---------- チームメンバー管理（企業オーナーのみ） ----------
   async function loadMembers(programId) {
     const container = document.getElementById("members-list");
@@ -1040,6 +1060,7 @@
         <p class="muted">${isHunter ? "ハンター" : "企業"}アカウントの情報を編集できます。</p>
         ${!isHunter && me.isOwner === false ? `<p class="muted" style="margin-top:0.25rem">ログイン中: ${esc(me.actingMemberName || "")}（チームメンバー・オーナー権限なし）</p>` : ""}
         ${isHunter ? `<p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0.5rem 0 0">ポイント: ${Number(me.points || 0).toLocaleString()}</p>` : ""}
+        ${isHunter ? renderVerificationStatus(me) : ""}
         ${isHunter ? `<button class="btn ghost sm" id="go-myreports" type="button" style="margin-top:0.5rem">提出したレポートを見る →</button>` : ""}
         ${!isHunter ? renderProgramTypeStatus(me) : ""}
 
@@ -1134,6 +1155,28 @@
     if (isHunter) {
       const goReportsBtn = document.getElementById("go-myreports");
       if (goReportsBtn) goReportsBtn.addEventListener("click", () => setTab("myreports"));
+
+      const startVerificationBtn = document.getElementById("start-verification-btn");
+      if (startVerificationBtn) {
+        startVerificationBtn.addEventListener("click", async () => {
+          startVerificationBtn.disabled = true;
+          startVerificationBtn.textContent = "準備中…";
+          try {
+            const result = await apiPost(`/hunters/${session.id}/start-verification`, {});
+            if (result.url) {
+              window.location.href = result.url;
+            } else {
+              showToast("本人確認の開始に失敗しました");
+              startVerificationBtn.disabled = false;
+              startVerificationBtn.textContent = "本人確認をリクエストする";
+            }
+          } catch (err) {
+            showToast(err.message || "本人確認の開始に失敗しました");
+            startVerificationBtn.disabled = false;
+            startVerificationBtn.textContent = "本人確認をリクエストする";
+          }
+        });
+      }
     }
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1305,7 +1348,9 @@
         </p>
         ${!isOwnerCompany && !isVdp && r.reward_amount != null ? `
           <p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0 0 1.25rem">
-            報奨金: ¥${Number(r.reward_amount).toLocaleString()}（プラットフォーム手数料${platformInfo.feePercent}%差引後、¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()} をお支払いします）${r.reward_paid ? "（支払い済み）" : "（未払い）"}
+            ${r.reward_paid
+              ? `受け取り額: ¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()}（支払い済み）`
+              : `受け取り予定額: ¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()}（未払い）`}
           </p>
         ` : ""}
 
