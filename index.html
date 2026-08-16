@@ -72,6 +72,9 @@
     .empty-state { padding: 2.5rem 1rem; text-align: center; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 10px; }
     .muted { color: var(--text-muted); font-size: 0.88rem; }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .search-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin-bottom: 1.5rem; }
+    .search-bar select { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 0.65rem 0.8rem; color: var(--text); font-family: 'Noto Sans JP', sans-serif; font-size: 0.9rem; width: 100%; }
+    .search-bar .field { margin: 0; }
     .card { text-align: left; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem; cursor: pointer; color: var(--text); font-family: inherit; display: flex; flex-direction: column; gap: 0.6rem; transition: border-color 0.15s ease; width: 100%; }
     .card:hover { border-color: var(--accent); }
     .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
@@ -182,7 +185,7 @@
     { key: "low", ja: "低", en: "Low", color: "#5B8DEF" },
   ];
 
-  const state = { tab: "home", programs: [], hunters: [], reportCount: 0, activeProgramId: null, activeReportId: null, reportOrigin: null, showHiddenReports: false };
+  const state = { tab: "home", programs: [], hunters: [], reportCount: 0, activeProgramId: null, activeReportId: null, reportOrigin: null, showHiddenReports: false, programSearchQuery: "", programTypeFilter: "all" };
 
   const main = document.getElementById("main");
   const toastEl = document.getElementById("toast");
@@ -321,6 +324,7 @@
       description: p.description,
       rewardMin: p.reward_min,
       rewardMax: p.reward_max,
+      programType: p.program_type,
       avatarUrl: p.avatar_key ? `${API_BASE}/avatars/${p.avatar_key}` : null,
       createdAt: p.created_at,
     };
@@ -432,9 +436,21 @@
     document.getElementById("stat-programs").addEventListener("click", () => setTab("programs"));
   }
 
-  function renderProgramList() {
-    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "programs"));
-    const cards = state.programs.map((p) => `
+  function getFilteredPrograms() {
+    const q = state.programSearchQuery.trim().toLowerCase();
+    return state.programs.filter((p) => {
+      if (state.programTypeFilter !== "all" && p.programType !== state.programTypeFilter) return false;
+      if (!q) return true;
+      const haystack = `${p.companyName || ""} ${p.description || ""} ${p.scope || ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+
+  function renderProgramCards(programs) {
+    if (programs.length === 0) {
+      return `<div class="empty-state"><p>条件に一致するプログラムがありません。</p></div>`;
+    }
+    return `<div class="card-grid">${programs.map((p) => `
       <button class="card" data-id="${p.id}">
         <div class="card-top">
           <div style="display:flex; align-items:center; gap:0.6rem;">
@@ -447,10 +463,21 @@
         </div>
         <p class="card-desc">${esc(p.description)}</p>
         <div class="card-meta">
-          <span class="reward">¥${Number(p.rewardMin).toLocaleString()} 〜 ¥${Number(p.rewardMax).toLocaleString()}</span>
+          <span class="severity-chip" style="--chip:${p.programType === "vdp" ? "#5B8DEF" : "#E8A33D"}"><i></i> ${p.programType === "vdp" ? "VDP" : "バグバウンティ"}</span>
+          ${p.programType === "vdp" ? "" : `<span class="reward">¥${Number(p.rewardMin).toLocaleString()} 〜 ¥${Number(p.rewardMax).toLocaleString()}</span>`}
         </div>
       </button>
-    `).join("");
+    `).join("")}</div>`;
+  }
+
+  function bindProgramCardClicks() {
+    main.querySelectorAll(".card[data-id]").forEach((el) => {
+      el.addEventListener("click", () => { state.activeProgramId = el.dataset.id; render(); });
+    });
+  }
+
+  function renderProgramList() {
+    document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === "programs"));
 
     main.innerHTML = `
       <section class="panel">
@@ -458,15 +485,44 @@
           <h2>プログラム一覧</h2>
           <button class="btn primary sm" id="go-company">+ プログラムを掲載</button>
         </div>
-        ${state.programs.length === 0
+
+        <div class="search-bar">
+          <div class="field" style="flex:2; min-width:200px;">
+            <input id="program-search-input" type="text" placeholder="会社名・内容で検索" value="${esc(state.programSearchQuery)}">
+          </div>
+          <div class="field" style="flex:1; min-width:160px;">
+            <select id="program-type-filter">
+              <option value="all">すべての種別</option>
+              <option value="bbp">バグバウンティ</option>
+              <option value="vdp">VDP</option>
+            </select>
+          </div>
+          <button class="btn primary" id="program-search-btn" type="button" style="flex-shrink:0;">検索</button>
+        </div>
+
+        <div id="program-results">${state.programs.length === 0
           ? `<div class="empty-state"><p>まだプログラムがありません。</p><p class="muted">企業として最初のプログラムを掲載してください。</p></div>`
-          : `<div class="card-grid">${cards}</div>`}
+          : renderProgramCards(getFilteredPrograms())}</div>
       </section>
     `;
+
     document.getElementById("go-company").addEventListener("click", () => setTab("company"));
-    main.querySelectorAll(".card").forEach((el) => {
-      el.addEventListener("click", () => { state.activeProgramId = el.dataset.id; render(); });
+    document.getElementById("program-type-filter").value = state.programTypeFilter;
+
+    function applyFilters() {
+      state.programSearchQuery = document.getElementById("program-search-input").value;
+      state.programTypeFilter = document.getElementById("program-type-filter").value;
+      document.getElementById("program-results").innerHTML = renderProgramCards(getFilteredPrograms());
+      bindProgramCardClicks();
+    }
+
+    document.getElementById("program-search-btn").addEventListener("click", applyFilters);
+    document.getElementById("program-type-filter").addEventListener("change", applyFilters);
+    document.getElementById("program-search-input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); applyFilters(); }
     });
+
+    bindProgramCardClicks();
   }
 
   async function renderProgramDetail() {
