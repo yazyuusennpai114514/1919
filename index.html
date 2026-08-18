@@ -120,6 +120,7 @@
     .auth-status { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
     .auth-status .who { font-family: 'IBM Plex Mono', monospace; color: var(--text); }
     .enroll-warning { background: color-mix(in srgb, var(--critical) 12%, transparent); border: 1px solid var(--critical); color: var(--text); padding: 0.9rem 1rem; border-radius: 8px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 1.5rem; }
+    .ai-triage-box { background: color-mix(in srgb, var(--accent) 8%, var(--panel-raised)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1.25rem; }
     .qr-box { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1.5rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 1.5rem; }
     .qr-box canvas { border-radius: 8px; }
     .secret-text { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--text-muted); word-break: break-all; text-align: center; }
@@ -402,7 +403,7 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">JAPAN-FOCUSED BUG BOUNTY PLATFORM</p>
-          <h1>日本人向けの、<br>BBPプラットフォーム。</h1>
+          <h1>脆弱性は、<br>見つけた人に還元する。</h1>
           <p class="lead">日本企業向けの、月額固定費ゼロで始められるバグバウンティ運用サイトです。企業はプログラムを掲載し、ハンターは登録して脆弱性を報告します。</p>
           <div class="hero-actions">
             <button class="btn primary" id="cta-company">企業として掲載する</button>
@@ -1408,6 +1409,15 @@
               ? `受け取り額: ¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()}（支払い済み）`
               : `受け取り予定額: ¥${Math.round(Number(r.reward_amount) * (1 - platformInfo.feePercent / 100)).toLocaleString()}（未払い）`}
           </p>
+        ` : ""}
+
+        ${isOwnerCompany ? `
+          <div class="ai-triage-box">
+            <p class="section-label" style="margin-bottom:0.5rem">🤖 AIによる一次トリアージ（参考情報）</p>
+            ${r.ai_triage_summary
+              ? `<p style="white-space:pre-wrap; font-size:0.88rem; line-height:1.7">${esc(r.ai_triage_summary)}</p>`
+              : `<p class="muted" style="font-size:0.85rem">生成中、または対象外です。少し時間をおいて再度開いてみてください。</p>`}
+          </div>
         ` : ""}
 
         <div class="detail-grid" style="grid-template-columns:1fr">
