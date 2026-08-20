@@ -120,7 +120,6 @@
     .auth-status { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
     .auth-status .who { font-family: 'IBM Plex Mono', monospace; color: var(--text); }
     .enroll-warning { background: color-mix(in srgb, var(--critical) 12%, transparent); border: 1px solid var(--critical); color: var(--text); padding: 0.9rem 1rem; border-radius: 8px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 1.5rem; }
-    .ai-triage-box { background: color-mix(in srgb, var(--accent) 8%, var(--panel-raised)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1.25rem; }
     .qr-box { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1.5rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 1.5rem; }
     .qr-box canvas { border-radius: 8px; }
     .secret-text { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--text-muted); word-break: break-all; text-align: center; }
@@ -403,7 +402,7 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">JAPAN-FOCUSED BUG BOUNTY PLATFORM</p>
-          <h1>日本人向けの、<br>バグバウンティイプラットフォーム。</h1>
+          <h1>脆弱性は、<br>見つけた人に還元する。</h1>
           <p class="lead">日本企業向けの、月額固定費ゼロで始められるバグバウンティ運用サイトです。企業はプログラムを掲載し、ハンターは登録して脆弱性を報告します。</p>
           <div class="hero-actions">
             <button class="btn primary" id="cta-company">企業として掲載する</button>
@@ -987,7 +986,11 @@
       headers: session ? { Authorization: `Bearer ${session.token}` } : {},
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || `GET ${path} failed`);
+    if (!res.ok) {
+      const err = new Error(json.error || `GET ${path} failed`);
+      err.status = res.status;
+      throw err;
+    }
     return json;
   }
 
@@ -1102,9 +1105,14 @@
     try {
       me = await apiGetAuthed("/auth/me");
     } catch (e) {
-      showToast("プロフィールの取得に失敗しました。再度ログインしてください");
-      await apiLogout();
-      setTab("login");
+      if (e.status === 401) {
+        showToast("セッションの有効期限が切れました。再度ログインしてください");
+        await apiLogout();
+        setTab("login");
+        return;
+      }
+      showToast("プロフィールの取得に失敗しました。時間をおいて再度お試しください");
+      setTab("home");
       return;
     }
 
@@ -1411,15 +1419,6 @@
           </p>
         ` : ""}
 
-        ${isOwnerCompany ? `
-          <div class="ai-triage-box">
-            <p class="section-label" style="margin-bottom:0.5rem">🤖 AIによる一次トリアージ（参考情報）</p>
-            ${r.ai_triage_summary
-              ? `<p style="white-space:pre-wrap; font-size:0.88rem; line-height:1.7">${esc(r.ai_triage_summary)}</p>`
-              : `<p class="muted" style="font-size:0.85rem">生成中、または対象外です。少し時間をおいて再度開いてみてください。</p>`}
-          </div>
-        ` : ""}
-
         <div class="detail-grid" style="grid-template-columns:1fr">
           <div><p class="section-label">詳細な説明</p><p style="white-space:pre-wrap">${esc(r.description)}</p></div>
         </div>
@@ -1669,13 +1668,16 @@
       showToast("APIへの接続に失敗しました");
     }
 
-    // 保存されているセッションが今も有効か確認する
+    // 保存されているセッションが今も有効か確認する（本当に認証エラー(401)の時だけログアウトさせる）
     const session = getSession();
     if (session) {
       try {
         await apiGetAuthed("/auth/me");
       } catch (e) {
-        clearSession();
+        if (e.status === 401) {
+          clearSession();
+        }
+        // それ以外（通信エラー・サーバーの一時的な不調など）はログイン状態を維持する
       }
     }
     renderAuthStatus();
