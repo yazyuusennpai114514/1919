@@ -1125,6 +1125,7 @@
         <p class="muted">${isHunter ? "ハンター" : "企業"}アカウントの情報を編集できます。</p>
         ${!isHunter && me.isOwner === false ? `<p class="muted" style="margin-top:0.25rem">ログイン中: ${esc(me.actingMemberName || "")}（チームメンバー・オーナー権限なし）</p>` : ""}
         ${isHunter ? `<p class="reward" style="font-family:'IBM Plex Mono',monospace; margin:0.5rem 0 0">ポイント: ${Number(me.points || 0).toLocaleString()}</p>` : ""}
+        ${isHunter && me.level ? `<p style="font-family:'IBM Plex Mono',monospace; margin:0.25rem 0 0; font-size:0.9rem">レベル: <span style="color:var(--accent); font-weight:600">${esc(me.level.name)}</span> <span style="color:var(--text-muted); font-size:0.78rem">(${me.level.score >= 0 ? "+" : ""}${me.level.score} / 有効 ${me.level.validCount}件 / N/A ${me.level.naCount}件)</span></p>` : ""}
         ${isHunter ? renderVerificationStatus(me) : ""}
         ${isHunter ? `<button class="btn ghost sm" id="go-myreports" type="button" style="margin-top:0.5rem">提出したレポートを見る →</button>` : ""}
         ${!isHunter ? renderProgramTypeStatus(me) : ""}
@@ -1687,4 +1688,3 @@
 </script>
 </body>
 </html>
-
