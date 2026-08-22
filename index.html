@@ -1028,7 +1028,7 @@
     if (status === "rejected") {
       return `
         <p class="muted" style="margin-top:0.5rem; color:var(--critical)">本人確認が承認されませんでした</p>
-        ${me.canStartVerification ? `<button class="btn ghost sm" id="start-verification-btn" type="button" style="margin-top:0.35rem">もう一度本人確認をリクエストする</button>` : ""}
+        ${me.canStartVerification ? `<button class="btn ghost sm" id="start-verification-btn" type="button" style="margin-top:0.35rem">再申請する</button>` : ""}
       `;
     }
     if (me.canStartVerification) {
