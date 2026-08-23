@@ -192,6 +192,28 @@
   let toastTimer = null;
 
   function sevMeta(key) { return SEVERITIES.find((s) => s.key === key) || SEVERITIES[2]; }
+  // プログラムバッジ定義
+  const BADGE_DEFS = {
+    responsive:  { label: "Responsive",  imageUrl: "https://1drv.ms/i/c/e4cd540adc823eeb/IQRFHSslWln0Tqv1wMu4aiRgAZI5z06m4HCYp2XLKkXAKgg?height=256" },
+    high_reward: { label: "High Reward", imageUrl: "https://1drv.ms/i/c/e4cd540adc823eeb/IQSPPKJTbwgqR7igUAWBCAelAVEf71YFT8vnFPz928_YEpM" },
+    active:      { label: "Active",      imageUrl: null },
+    safe_harbor: { label: "Safe Harbor", imageUrl: "https://1drv.ms/i/c/e4cd540adc823eeb/IQQID5GqHnFGQozW1CPSLMP0AbsqxPjoR63_LQGh_wSQziw" },
+  };
+
+  function renderBadges(badgesJson) {
+    const badges = (() => { try { return JSON.parse(badgesJson || "[]"); } catch { return []; } })();
+    if (!badges.length) return "";
+    const items = badges.map((key) => {
+      const def = BADGE_DEFS[key];
+      if (!def) return "";
+      const img = def.imageUrl
+        ? `<img src="${def.imageUrl}" alt="${esc(def.label)}" style="width:1.2rem;height:1.2rem;object-fit:contain;border-radius:2px;">`
+        : `<span style="font-size:1rem;">🟢</span>`;
+      return `<span style="display:inline-flex;align-items:center;gap:0.3rem;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);border-radius:999px;padding:0.18rem 0.55rem;font-size:0.72rem;font-weight:600;color:var(--text);">${img}${esc(def.label)}</span>`;
+    }).join("");
+    return `<div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;">${items}</div>`;
+  }
+
   function fmtDate(ts) {
     const d = new Date(ts);
     return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0");
@@ -327,6 +349,9 @@
       programType: p.program_type,
       avatarUrl: p.avatar_key ? `${API_BASE}/avatars/${p.avatar_key}` : null,
       createdAt: p.created_at,
+      badges: p.badges || "[]",
+      safeHarborPdfUrl: p.safe_harbor_pdf_url || null,
+      isAccepting: !!p.is_accepting,
     };
   }
   function normalizeReport(r) {
@@ -466,6 +491,7 @@
           <span class="severity-chip" style="--chip:${p.programType === "vdp" ? "#5B8DEF" : "#E8A33D"}"><i></i> ${p.programType === "vdp" ? "VDP" : "バグバウンティ"}</span>
           ${p.programType === "vdp" ? "" : `<span class="reward">¥${Number(p.rewardMin).toLocaleString()} 〜 ¥${Number(p.rewardMax).toLocaleString()}</span>`}
         </div>
+        ${renderBadges(p.badges)}
       </button>
     `).join("")}</div>`;
   }
@@ -607,8 +633,8 @@
       }
       formOpen = !formOpen;
       e.target.textContent = formOpen ? "フォームを閉じる" : "脆弱性を報告する";
-      document.getElementById("report-form-slot").innerHTML = formOpen ? reportFormHTML() : "";
-      if (formOpen) bindReportForm(program.id);
+      document.getElementById("report-form-slot").innerHTML = formOpen ? reportFormWithSafeHarbor(program) : "";
+      if (formOpen) bindReportForm(program.id, program);
     });
   }
 
@@ -645,7 +671,24 @@
     `;
   }
 
-  function bindReportForm(programId) {
+  function reportFormWithSafeHarbor(program) {
+    const badges = (() => { try { return JSON.parse(program.badges || "[]"); } catch { return []; } })();
+    const hasSafeHarbor = badges.includes("safe_harbor") && program.safeHarborPdfUrl;
+    if (!hasSafeHarbor) return reportFormHTML();
+    return `
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:1rem;margin-bottom:1rem;">
+        <p style="font-weight:600;margin:0 0 0.4rem">⚖️ Safe Harbor 同意確認</p>
+        <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">このプログラムにはSafe Harbor（不訴追）ポリシーが設定されています。<a href="${esc(program.safeHarborPdfUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">ポリシー文書を確認する →</a></p>
+        <label style="display:flex;align-items:flex-start;gap:0.6rem;cursor:pointer;font-size:0.85rem">
+          <input type="checkbox" id="safe-harbor-agree" style="margin-top:0.15rem;accent-color:var(--accent)">
+          <span>Safe Harborポリシーを読み、内容に同意した上でレポートを提出します</span>
+        </label>
+      </div>
+      ${reportFormHTML()}
+    `;
+  }
+
+  function bindReportForm(programId, program) {
     const form = document.getElementById("report-form");
     form.querySelectorAll(".sev-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -661,6 +704,13 @@
       const errEl = document.getElementById("report-error");
       if (!data.title || !data.description || !data.contactEmail) {
         errEl.textContent = "タイトル・内容・連絡先は必須です";
+        errEl.style.display = "block";
+        return;
+      }
+      // Safe Harbor 同意チェック
+      const agreeBox = document.getElementById("safe-harbor-agree");
+      if (agreeBox && !agreeBox.checked) {
+        errEl.textContent = "Safe Harborポリシーへの同意が必要です";
         errEl.style.display = "block";
         return;
       }
@@ -1152,6 +1202,13 @@
             </label>
           ` : `
             <label class="field"><span class="field-label">会社名 *</span><input name="companyName" value="${esc(me.company_name)}"></label>
+            <label class="field" style="flex-direction:row;align-items:center;gap:0.75rem;cursor:pointer">
+              <input type="checkbox" name="isAccepting" id="is-accepting-check" ${me.is_accepting ? "checked" : ""} style="width:1.1rem;height:1.1rem;accent-color:var(--accent)">
+              <span>
+                <span class="field-label" style="margin:0">報告を受け付ける</span>
+                <span class="field-hint" style="margin:0">オフにすると「Active」バッジが外れ、ハンターからの新規レポートが停止します</span>
+              </span>
+            </label>
             <label class="field">
               <span class="field-label">対象スコープ *</span>
               <textarea name="scope" rows="3">${esc(me.scope)}</textarea>
@@ -1170,6 +1227,18 @@
         </form>
       </section>
 
+      ${!isHunter ? `
+        <section class="panel narrow" style="margin-top:1.5rem">
+          <h2>Safe Harbor 設定</h2>
+          <p class="muted">Safe Harborバッジを取得するには、担当者がWeb上で署名してください。署名済みPDFはGoogle Driveに自動保存されます。</p>
+          ${me.safe_harbor_pdf_url
+            ? `<p style="margin-top:0.75rem">✅ 署名済み <a href="${esc(me.safe_harbor_pdf_url)}" target="_blank" rel="noopener" style="color:var(--accent)">PDFを確認する</a></p>
+               <button class="btn ghost sm" id="safe-harbor-sign-btn" type="button" style="margin-top:0.5rem">再署名する</button>`
+            : `<button class="btn ghost sm" id="safe-harbor-sign-btn" type="button" style="margin-top:0.75rem">署名画面へ進む →</button>`
+          }
+        </section>
+      ` : ""}
+
       ${!isHunter && me.isOwner !== false ? `
         <section class="panel narrow" style="margin-top:1.5rem">
           <h2>チームメンバー</h2>
@@ -1186,6 +1255,18 @@
         </section>
       ` : ""}
     `;
+
+    if (!isHunter) {
+      const safeHarborBtn = document.getElementById("safe-harbor-sign-btn");
+      if (safeHarborBtn) {
+        safeHarborBtn.addEventListener("click", () => {
+          // セッショントークンをURLパラメータで渡してsign.bughunter.ukへ
+          const session = getSession();
+          const url = `https://sign.bughunter.uk/?token=${encodeURIComponent(session.token)}`;
+          window.open(url, "_blank", "noopener");
+        });
+      }
+    }
 
     if (!isHunter && me.isOwner !== false) {
       loadMembers(session.id);
@@ -1275,6 +1356,7 @@
               description: data.description,
               rewardMin: Number(data.rewardMin) || 0,
               rewardMax: Number(data.rewardMax) || 0,
+              isAccepting: document.getElementById("is-accepting-check").checked,
             };
         await apiPatch(path, payload);
 
