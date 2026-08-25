@@ -126,8 +126,7 @@
     .backup-codes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
     .backup-codes span { font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; color: var(--text); }
     .code-input { font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; }
-    .login-type-toggle { display: flex; gap: 0.5rem; }
-    .login-type-toggle button { flex: 1; }
+
     .report-row-clickable { cursor: pointer; transition: border-color 0.15s ease; }
     .report-row-clickable:hover { border-color: var(--accent); }
     .comment-thread { display: flex; flex-direction: column; gap: 0.75rem; margin: 1.25rem 0; }
@@ -1685,11 +1684,20 @@
         <form class="form" id="login-form">
           <label class="field">
             <span class="field-label">アカウント種別</span>
-            <div class="login-type-toggle">
-              <button type="button" class="btn ghost sm active-type" data-type="hunter">ハンター</button>
-              <button type="button" class="btn ghost sm" data-type="program">企業</button>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.25rem">
+              <label id="type-hunter-card" style="display:flex;flex-direction:column;align-items:center;gap:0.4rem;padding:0.85rem;border-radius:8px;border:2px solid var(--accent);background:var(--accent-dim);cursor:pointer;transition:all 0.15s">
+                <input type="radio" name="userType" value="hunter" checked style="display:none">
+                <span style="font-size:1.4rem">🎯</span>
+                <span style="font-weight:600;font-size:0.9rem">ハンター</span>
+                <span style="font-size:0.75rem;color:var(--text-muted)">脆弱性を報告する</span>
+              </label>
+              <label id="type-program-card" style="display:flex;flex-direction:column;align-items:center;gap:0.4rem;padding:0.85rem;border-radius:8px;border:2px solid var(--border);background:transparent;cursor:pointer;transition:all 0.15s">
+                <input type="radio" name="userType" value="program" style="display:none">
+                <span style="font-size:1.4rem">🏢</span>
+                <span style="font-weight:600;font-size:0.9rem">企業</span>
+                <span style="font-size:0.75rem;color:var(--text-muted)">プログラムを管理する</span>
+              </label>
             </div>
-            <input type="hidden" name="userType" value="hunter">
           </label>
           <label class="field"><span class="field-label">メールアドレス *</span><input type="email" name="email" placeholder="you@example.com"></label>
           <label class="field">
@@ -1703,13 +1711,20 @@
     `;
 
     const form = document.getElementById("login-form");
-    form.querySelectorAll(".login-type-toggle button").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        form.querySelectorAll(".login-type-toggle button").forEach((b) => b.classList.remove("active-type"));
-        btn.classList.add("active-type");
-        form.querySelector("[name=userType]").value = btn.dataset.type;
-      });
-    });
+
+    // アカウント種別カードの切り替え
+    const hunterCard = document.getElementById("type-hunter-card");
+    const programCard = document.getElementById("type-program-card");
+    function selectType(type) {
+      const isHunter = type === "hunter";
+      hunterCard.style.border = isHunter ? "2px solid var(--accent)" : "2px solid var(--border)";
+      hunterCard.style.background = isHunter ? "var(--accent-dim)" : "transparent";
+      programCard.style.border = isHunter ? "2px solid var(--border)" : "2px solid var(--accent)";
+      programCard.style.background = isHunter ? "transparent" : "var(--accent-dim)";
+      form.querySelector(`input[value="${type}"]`).checked = true;
+    }
+    hunterCard.addEventListener("click", () => selectType("hunter"));
+    programCard.addEventListener("click", () => selectType("program"));
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
