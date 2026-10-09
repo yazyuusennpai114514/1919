@@ -1305,10 +1305,19 @@
       const safeHarborBtn = document.getElementById("safe-harbor-sign-btn");
       if (safeHarborBtn) {
         safeHarborBtn.addEventListener("click", () => {
-          // セッショントークンをURLパラメータで渡してsign.bughunter.ukへ
-          const session = getSession();
-          const url = `https://sign.bughunter.uk/?token=${encodeURIComponent(session.token)}`;
-          window.open(url, "_blank", "noopener");
+          // トークンはURLに載せず、postMessageで sign.bughunter.uk にだけ渡す
+          const SIGN_ORIGIN = "https://sign.bughunter.uk";
+          const win = window.open(SIGN_ORIGIN + "/", "_blank");
+          if (!win) { alert("ポップアップがブロックされました。許可してから再度お試しください。"); return; }
+          const onMsg = (ev) => {
+            if (ev.origin !== SIGN_ORIGIN || ev.source !== win) return;
+            if (!ev.data || ev.data.type !== "bbp-sign-ready") return;
+            const session = getSession();
+            win.postMessage({ type: "bbp-sign-token", token: session && session.token }, SIGN_ORIGIN);
+            window.removeEventListener("message", onMsg);
+          };
+          window.addEventListener("message", onMsg);
+          setTimeout(() => window.removeEventListener("message", onMsg), 60000);
         });
       }
     }
