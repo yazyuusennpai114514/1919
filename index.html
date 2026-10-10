@@ -61,6 +61,8 @@
     button.stat:hover { background: var(--panel-raised); }
     .stat-num { font-family: 'IBM Plex Mono', monospace; font-size: 2rem; font-weight: 600; color: var(--accent); }
     .stat-label { font-size: 0.78rem; color: var(--text-muted); }
+    .app-guide { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; margin: 0 0 1.25rem; font-size: 0.85rem; line-height: 1.75; }
+    .app-list { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; line-height: 1.9; }
     .home-block { display: flex; flex-direction: column; gap: 0.25rem; }
     .home-h2 { font-family: 'IBM Plex Mono', monospace; font-size: clamp(1.15rem, 2.6vw, 1.5rem); line-height: 1.5; font-weight: 600; margin: 0 0 1rem; }
     .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
@@ -1007,6 +1009,18 @@
           必ず今のうちにスキャン・保存してください。
         </div>
 
+        <div class="app-guide">
+          <p class="section-label" style="margin:0 0 0.5rem">認証アプリとは？</p>
+          <p class="muted" style="margin:0 0 0.6rem">ログイン時に使う、30秒ごとに変わる6桁のコードを表示するスマホアプリです（パスワードの代わりになります）。まだ無い方は、先にスマホへ次のいずれかをインストールしてください（無料）。</p>
+          <ul class="app-list">
+            <li><strong>Google Authenticator</strong>（Google認証システム）</li>
+            <li><strong>Microsoft Authenticator</strong></li>
+            <li><strong>Authy</strong></li>
+            <li><strong>1Password</strong> など（TOTP対応のアプリならOK）</li>
+          </ul>
+          <p class="muted" style="margin:0.6rem 0 0">App Store / Google Play で上記の名前を検索 → インストール → アプリ内の「＋」から「QRコードをスキャン」で下のQRコードを読み取ると、<strong>bughunter.uk</strong> が追加されます。QRが読めない場合は「手動入力」でキーを入力してください。</p>
+        </div>
+
         <div class="qr-box">
           <img id="qr-image" width="220" height="220" alt="QRコード" style="border-radius:8px; background:#fff; padding:8px;">
           <p class="secret-text">手動入力する場合のキー:<br>${esc(enrollData.secret)}</p>
@@ -1792,7 +1806,7 @@
     main.innerHTML = `
       <section class="panel narrow">
         <h2>ログイン</h2>
-        <p class="muted">メールアドレスと、認証アプリに表示されている6桁のコードを入力してください。</p>
+        <p class="muted">メールアドレスと、認証アプリ（Google Authenticator / Microsoft Authenticator / Authy など）に表示されている6桁のコードを入力してください。</p>
         <form class="form" id="login-form">
           <label class="field">
             <span class="field-label">アカウント種別</span>
