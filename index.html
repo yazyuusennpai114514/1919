@@ -821,8 +821,12 @@
           </div>
           <label class="field">
             <span class="field-label">プログラムの説明 *</span>
-            <textarea name="description" rows="4" placeholder="プログラムの目的、審査基準、セーフハーバーの範囲など"></textarea>
+            <textarea name="description" rows="12" placeholder="プログラムの目的、審査基準、セーフハーバーの範囲など"></textarea>
           </label>
+          <div style="margin-top:-0.4rem">
+            <button type="button" class="btn ghost sm" data-desc-template>テンプレートを入力欄に挿入する</button>
+            <span class="field-hint" style="margin-left:0.5rem">（）内の例を、自社の内容に書き換えてください</span>
+          </div>
           <label class="field" style="flex-direction:row; align-items:center; gap:0.5rem">
             <input type="checkbox" name="agreedToTerms" style="width:auto">
             <span class="field-label" style="margin:0"><a href="terms.html" target="_blank" style="color:var(--accent)">利用規約</a>と<a href="privacy.html" target="_blank" style="color:var(--accent)">プライバシーポリシー</a>に同意する</span>
@@ -1290,8 +1294,11 @@
             </div>
             <label class="field">
               <span class="field-label">プログラムの説明 *</span>
-              <textarea name="description" rows="4">${esc(me.description)}</textarea>
+              <textarea name="description" rows="10">${esc(me.description)}</textarea>
             </label>
+            <div style="margin-top:-0.4rem">
+              <button type="button" class="btn ghost sm" data-desc-template>テンプレートを入力欄に挿入する</button>
+            </div>
           `}
           <p class="form-error" id="profile-error" style="display:none"></p>
           <button class="btn primary" type="submit">保存する</button>
@@ -1942,6 +1949,60 @@
       </div>
     `;
   }
+
+
+  // ---------- プログラム説明のテンプレート ----------
+  function buildDescriptionTemplate(isVdp) {
+    const reward = isVdp
+      ? "本プログラムは報告受付のみで、報奨金のお支払いはありません。（例）有効な報告には、対応状況を必ずご連絡します。"
+      : "（例）重大度と影響に応じて、上記の報奨金レンジの範囲内でお支払いします。重複した報告は、最初の報告者のみを対象とします。";
+    return [
+      "【プログラムの目的】",
+      "（例）当社サービスの安全性向上のため、外部の研究者から脆弱性の報告を受け付けます。",
+      "",
+      "【対象範囲】",
+      "（上の「対象範囲」欄に書いたもの以外に、補足があれば）",
+      "",
+      "【対象外とするもの】",
+      "・サービスに負荷をかける攻撃（DoS / DDoS など）",
+      "・フィッシングやなりすましなどの社会工学、物理的な攻撃",
+      "・再現手順のない、スキャナの出力のみの報告",
+      "・すでに把握している、または既知の問題",
+      "",
+      "【調査時の禁止事項】",
+      "・他のユーザーのデータの閲覧・取得・改変（調査には自分のテストアカウントのみを使用してください）",
+      "・サービスの運営に支障を与える行為",
+      "・修正前の、第三者への脆弱性情報の公開",
+      "",
+      "【報告に含めてほしい内容】",
+      "・脆弱性の概要と、想定される影響",
+      "・再現手順（URL、リクエスト、スクリーンショットなど）",
+      "",
+      "【重大度の基準】",
+      "重大度は「緊急」「高」「中」「低」で判断します。（例）影響範囲、悪用の難しさ、再現性を考慮します。",
+      "",
+      "【報奨金】",
+      reward,
+      "",
+      "【Safe Harbor（セーフハーバー）】",
+      "（例）本プログラムのルールの範囲内で、誠実に行われた調査については、当社は法的措置をとりません。",
+      "",
+      "【対応の目安】",
+      "（例）報告の受領後、5営業日以内に最初の返信をします。",
+    ].join("\n");
+  }
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-desc-template]");
+    if (!btn) return;
+    const form = btn.closest("form") || document;
+    const ta = form.querySelector('textarea[name="description"]');
+    if (!ta) return;
+    if (ta.value.trim() && !confirm("入力済みの内容を、テンプレートで上書きしますか？")) return;
+    const typeInput = form.querySelector('input[name="programType"]');
+    ta.value = buildDescriptionTemplate(!!typeInput && typeInput.value === "vdp");
+    ta.focus();
+  });
 
   // ---------- init ----------
   (async function init() {
